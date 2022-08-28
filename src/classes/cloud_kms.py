@@ -5,9 +5,7 @@ import google.api_core.exceptions as GoogleErrors
 from google.cloud import kms
 
 # import third-party libraries
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import types
+from cryptography.hazmat.primitives import hashes
 
 # import Python's standard libraries
 import json

@@ -11,8 +11,8 @@ from google.cloud import logging as gcp_logging
 import logging
 
 # import local python libraries
-from classes import APP_CONSTANTS, CLOUD_LOGGER, CONSTANTS
-from functions import CacheControlMiddleware, CacheControlURLRule
+from classes import APP_CONSTANTS, CLOUD_LOGGER, CONSTANTS, \
+                    CacheControlMiddleware, CacheControlURLRule
 from routers import api_v1
 
 """--------------------------- Start of API Configuration ---------------------------"""

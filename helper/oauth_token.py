@@ -5,7 +5,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google.auth.exceptions import RefreshError
-from google.api_core.exceptions import FailedPrecondition
 
 # import python standard libraries
 import pathlib
@@ -26,10 +25,6 @@ spec = spec_from_file_location("secret_manager", str(SM_PY_FILE))
 secret_manager = module_from_spec(spec)
 sys.modules[spec.name] = secret_manager
 spec.loader.exec_module(secret_manager)
-
-# If modifying these scopes, delete the file token.json.
-# Scopes details: https://developers.google.com/identity/protocols/oauth2/scopes#drive
-SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 C = secret_manager.C
 SECRET_MANAGER = secret_manager.SECRET_MANAGER
@@ -74,7 +69,7 @@ def create_token() -> None:
     # completes for the first time and will be saved to Google Secret Manager API.
     if (GOOGLE_TOKEN is not None):
         try:
-            creds = Credentials.from_authorized_user_info(GOOGLE_TOKEN, SCOPES)
+            creds = Credentials.from_authorized_user_info(GOOGLE_TOKEN, C.GOOGLE_DRIVE_SCOPES)
         except (RefreshError):
             print("Token is no longer valid as there is a refresh error!\n")
     else:
@@ -88,7 +83,7 @@ def create_token() -> None:
             print("\r\033[KRefreshed token!\n")
         else:
             print("Token is expired or invalid!\n")
-            flow = InstalledAppFlow.from_client_config(GOOGLE_OAUTH_CLIENT, SCOPES)
+            flow = InstalledAppFlow.from_client_config(GOOGLE_OAUTH_CLIENT, C.GOOGLE_DRIVE_SCOPES)
             creds = flow.run_local_server(port=8080)
 
         # For print message to indicate if the token is 
