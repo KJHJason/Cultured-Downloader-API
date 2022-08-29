@@ -4,10 +4,10 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, types
 
 # import Python's standard libraries
-from typing import Callable, Optional
+from typing import Callable
 
 def rsa_encrypt(plaintext: str | bytes, 
-                publicKey: str | types.PUBLIC_KEY_TYPES, digestMethod: Optional[Callable] = hashes.SHA512) -> bytes:
+                publicKey: str | types.PUBLIC_KEY_TYPES, digestMethod: Callable | None = hashes.SHA512) -> bytes:
     """Encrypts a plaintext using the public key (RSA-OAEP-SHA)
 
     Args:

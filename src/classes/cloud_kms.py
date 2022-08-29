@@ -10,7 +10,9 @@ from cryptography.hazmat.primitives import hashes
 # import Python's standard libraries
 import json
 import base64
-from typing import Optional, Callable, Any
+import secrets
+import warnings
+from typing import Callable, Any
 from binascii import Error as BinasciiError
 
 # import local python libraries
@@ -52,6 +54,84 @@ class GCP_KMS:
         )
         raise DecryptionError("Asymmetric Decryption failed.")
 
+    def get_random_bytes(self, nBytes: int, 
+                         generateFromHSM: bool | None = False, returnHex: bool | None = False) -> bytes | str:
+        """Generate a random byte/hex string of length nBytes that is cryptographically secure.
+
+        Args:
+            nBytes (int): 
+                The number of bytes to generate.
+            generateFromHSM (bool, optional):
+                If True, the random bytes will be generated from GCP KMS's Cloud HSM. (Default: False)
+            returnHex (bool, optional):
+                If True, the random bytes will be returned as a hex string. (Default: False)
+
+        Returns:
+            bytes | str:
+                The random bytes or random hex string.
+        """
+        if (nBytes < 1):
+            raise ValueError("nBytes must be greater than 0!")
+
+        # Since GCP KMS RNG Cloud HSM's minimum length is 8 bytes, 
+        # fallback to secrets library if nBytes is less than 8
+        if (generateFromHSM and nBytes < 8):
+            warnings.warn("GCP KMS does not accept nBytes less than 8, falling back to secrets library...")
+            generateFromHSM = False
+
+        if (not generateFromHSM):
+            if (returnHex):
+                return secrets.token_hex(nBytes)
+            else:
+                return secrets.token_bytes(nBytes)
+
+        # Construct the location name
+        locationName = self.__KMS_CLIENT.common_location_path(
+            C.GOOGLE_PROJECT_NAME, C.GOOGLE_PROJECT_LOCATION
+        )
+
+        # Check if the number of bytes exceeds GCP KMS RNG Cloud HSM limit
+        if (nBytes > 1024):
+            # if exceeded, make multiple API calls to generate the random bytes
+            bytesArr = []
+            maxBytes = 1024
+            numOfMaxBytes = nBytes // maxBytes
+            for _ in range(numOfMaxBytes):
+                bytesArr.append(
+                    self.__KMS_CLIENT.generate_random_bytes(
+                        request={
+                            "location": locationName,
+                            "length_bytes": maxBytes,
+                            "protection_level": kms.ProtectionLevel.HSM
+                        }
+                    )
+                )
+
+            remainder = nBytes % maxBytes
+            if (remainder > 0):
+                bytesArr.append(
+                    self.__KMS_CLIENT.generate_random_bytes(
+                        request={
+                            "location": locationName,
+                            "length_bytes": remainder,
+                            "protection_level": kms.ProtectionLevel.HSM
+                        }
+                    )
+                )
+            randomBytes = b"".join(bytesArr)
+        else:
+            # Call the Google Cloud Platform API to generate a random byte string.
+            randomBytesResponse = self.__KMS_CLIENT.generate_random_bytes(
+                request={
+                    "location": locationName, 
+                    "length_bytes": nBytes, 
+                    "protection_level": kms.ProtectionLevel.HSM
+                }
+            )
+            randomBytes = randomBytesResponse.data
+
+        return randomBytes if (not returnHex) else randomBytes.hex()
+
     @property
     def KMS_CLIENT(self) -> kms.KeyManagementServiceClient:
         """Returns the KMS client."""
@@ -64,7 +144,7 @@ class GCP_KMS:
 
 class GCP_AESGCM(GCP_KMS):
     """Creates an authenticated GCP KMS client that uses AES-256-GCM for cryptographic operations."""
-    def __init__(self, keyID: Optional[str] = None) -> None:
+    def __init__(self, keyID: str | None = None) -> None:
         """Constructor for GCP_AESGCM
 
         Attributes:
@@ -74,7 +154,8 @@ class GCP_AESGCM(GCP_KMS):
         self.KEY_ID = keyID
         super().__init__()
 
-    def symmetric_encrypt(self, plaintext: str | bytes, keyID: Optional[str] = None, keyRingID: Optional[str] = None) -> bytes:
+    def symmetric_encrypt(self, plaintext: str | bytes, 
+                          keyID: str | None = None, keyRingID: str | None = None) -> bytes:
         """Using AES-256-GCM to encrypt the provided plaintext via GCP KMS.
 
         Args:
@@ -129,8 +210,8 @@ class GCP_AESGCM(GCP_KMS):
 
         return response.ciphertext
 
-    def symmetric_decrypt(self, ciphertext: bytes, keyID: Optional[str] = None, 
-                keyRingID: Optional[str] = None, decode: Optional[bool] = False) -> str | bytes:
+    def symmetric_decrypt(self, ciphertext: bytes, keyID: str | None = None, 
+                keyRingID: str | None = None, decode: bool | None = False) -> str | bytes:
         """Using AES-256-GCM to decrypt the provided ciphertext via GCP KMS.
 
         Args:
@@ -197,7 +278,7 @@ class GCP_AESGCM(GCP_KMS):
 
 class GCP_Asymmetric(GCP_KMS):
     """Creates an authenticated GCP KMS client that uses asymmetric cryptography operations."""
-    def __init__(self, keyVerSecretID: str, keyID: Optional[str] = None) -> None:
+    def __init__(self, keyVerSecretID: str, keyID: str | None = None) -> None:
         """Constructor for GCP_Asymmetric
 
         Attributes:
@@ -214,8 +295,8 @@ class GCP_Asymmetric(GCP_KMS):
         """Returns the latest version of the key version that is stored in GCP Secret Manager API."""
         return int(SECRET_MANAGER.get_secret_payload(secretID=self.__KEY_VERSION_SECRET_ID))
 
-    def get_public_key(self, keyID: Optional[str] = None, 
-                       keyRingID: Optional[str] = None, version: Optional[int] = None) -> str:
+    def get_public_key(self, keyID: str | None = None, 
+                       keyRingID: str | None = None, version: int | None = None) -> str:
         """Returns the public key of the provided key ID.
 
         Args:
@@ -256,8 +337,8 @@ class GCP_Asymmetric(GCP_KMS):
 
 class GCP_RSA(GCP_Asymmetric):
     """Creates an authenticated GCP KMS client that uses RSA-OAEP-SHA for cryptographic operations."""
-    def __init__(self, keyVerSecretID: str, keyID: Optional[str] = None, 
-                 digestMethod: Optional[Callable] = hashes.SHA512) -> None:
+    def __init__(self, keyVerSecretID: str, keyID: str | None = None, 
+                 digestMethod: Callable | None = hashes.SHA512) -> None:
         """Constructor for GCP_RSA
 
         Attributes:
@@ -272,8 +353,8 @@ class GCP_RSA(GCP_Asymmetric):
         self.__DIGEST_METHOD = digestMethod
         super().__init__(keyID=keyID, keyVerSecretID=keyVerSecretID)
 
-    def asymmetric_encrypt(self, plaintext: str | bytes, keyID: Optional[str] = None,
-                keyRingID: Optional[str] = None, version: Optional[int] = None) -> bytes:
+    def asymmetric_encrypt(self, plaintext: str | bytes, keyID: str | None = None,
+                keyRingID: str | None = None, version: int | None = None) -> bytes:
         """Encrypts the plaintext using RSA-OAEP-SHA via GCP KMS API.
 
         Args:
@@ -311,8 +392,8 @@ class GCP_RSA(GCP_Asymmetric):
         publicKey = self.get_public_key(keyID=keyID, keyRingID=keyRingID, version=version)
         return rsa_encrypt(plaintext=plaintext, publicKey=publicKey, digestMethod=self.__DIGEST_METHOD)
 
-    def asymmetric_decrypt(self, ciphertext: bytes, keyID: Optional[str] = None, 
-                keyRingID: Optional[str] = None, version: Optional[int] = None, decode: Optional[bool] = False) -> bytes | str:
+    def asymmetric_decrypt(self, ciphertext: bytes, keyID: str | None = None, 
+                keyRingID: str | None = None, version: int | None = None, decode: bool | None = False) -> bytes | str:
         """Encrypts the plaintext using RSA-OAEP-SHA via GCP KMS API.
 
         Args:
@@ -378,7 +459,7 @@ class UserCookie(GCP_RSA, GCP_AESGCM):
     """Creates an authenticated GCP KMS client that uses RSA-OAEP-SHA and 
     AES-256-GCM for cryptographic operations with the user's cookies.
     """
-    def __init__(self, digestMethod: Optional[Callable] = hashes.SHA512) -> None:
+    def __init__(self, digestMethod: Callable | None = hashes.SHA512) -> None:
         """Constructor for UserCookie
 
         Attributes:

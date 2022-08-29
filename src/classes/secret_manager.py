@@ -43,7 +43,7 @@ class SecretManager:
             response = self.__SM_CLIENT.access_secret_version(request={"name": secretName})
         except (GoogleErrors.NotFound) as e:
             # secret version not found
-            print("Error caught:")
+            print("Could not find secret:")
             print(e, end="\n\n")
             return
 
@@ -86,11 +86,13 @@ class SecretManager:
         )
 
         # get the latest secret version and log the action
-        latestVer = int(response.name.split("/")[-1])
+        latestVer = int(response.name.rsplit(sep="/", maxsplit=1)[1])
         CLOUD_LOGGER.info(
             content={
                 "message": f"Secret {secretID} (version {latestVer}) created successfully!",
-                "details": response
+                "details": {
+                    "created": str(response.create_time)
+                }
             }
         )
 
@@ -99,7 +101,17 @@ class SecretManager:
             for version in range(latestVer - 1, 0, -1):
                 secretVersionPath = self.__SM_CLIENT.secret_version_path(C.GOOGLE_PROJECT_NAME, secretID, version)
                 try:
-                    self.__SM_CLIENT.destroy_secret_version(request={"name": secretVersionPath})
+                    deleteRes = self.__SM_CLIENT.destroy_secret_version(
+                        request={"name": secretVersionPath}
+                    )
+                    CLOUD_LOGGER.info(
+                        content={
+                            "message": f"Secret {secretID} (version {version}) destroyed successfully!",
+                            "details": {
+                                "destroyed": str(deleteRes.destroy_time)
+                            }
+                        }
+                    )
                 except (GoogleErrors.FailedPrecondition):
                     # key is already destroyed
                     if (destroyOptimise):
