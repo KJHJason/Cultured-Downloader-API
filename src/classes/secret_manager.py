@@ -87,12 +87,11 @@ class SecretManager:
 
         # get the latest secret version and log the action
         latestVer = int(response.name.split("/")[-1])
-        CLOUD_LOGGER.write_log_entry(
-            logMessage={
+        CLOUD_LOGGER.info(
+            content={
                 "message": f"Secret {secretID} (version {latestVer}) created successfully!",
                 "details": response
-            },
-            severity="INFO"
+            }
         )
 
         # disable all past versions if destroyPastVer is True
@@ -106,9 +105,8 @@ class SecretManager:
                     if (destroyOptimise):
                         break
 
-            CLOUD_LOGGER.write_log_entry(
-                logMessage=f"Successfully destroyed all past versions of the secret {secretID}",
-                severity="INFO"
+            CLOUD_LOGGER.info(
+                content=f"Successfully destroyed all past versions of the secret {secretID}"
             )
 
         return response

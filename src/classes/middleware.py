@@ -1,7 +1,43 @@
 # import third-party libraries
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+
+# import Python's standard libraries
+import json
+from typing import Any
+
+class PrettyJSONResponse(JSONResponse):
+    def render(self, content: Any) -> bytes:
+        return json.dumps(
+            obj=content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=4,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+class APIBadRequest(Exception):
+    """Class for the APIBadRequest exception class that will
+    return a JSON response with the error message when raised"""
+    def __init__(self, error: str | dict, statusCode: int | None = 400):
+        """Constructor for the APIBadRequest exception class
+
+        Usage Example:
+        >>> raise APIBadRequest({"error": "invalid request"})
+        >>> raise APIBadRequest("invalid request") # the error message will be the same as above
+
+        Attributes:
+            error (str | dict):
+                The error message to be returned to the user.
+                If the error message is a str, it will be converted to a dict with the key "error".
+            statusCode (int | None):
+                The status code to be returned to the user. (Default: 400)
+        """
+        self.error = error if (isinstance(error, dict)) \
+                           else {"error": error}
+        self.code = statusCode
 
 class CacheControlURLRule:
     """Creates an object that contains the path and cache control headers for a route"""

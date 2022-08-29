@@ -11,6 +11,7 @@ else:
 @dataclass(frozen=True, repr=False)
 class AppConstants:
     """This dataclass is used to store all the constants used in the application."""
+    LATEST_VER: str = "v1"
     DEBUG_MODE: bool = True
 
     # For encrypting/decrypting the saved user's cookie data
@@ -19,12 +20,11 @@ class AppConstants:
     COOKIE_ENCRYPTION_KEY: str = "cookie-key"
 
     # For the Google Drive API
-    GDRIVE_API_TOKEN: str = SECRET_MANAGER.get_secret_payload(secretID="gdrive-api-token")
-    REQ_HEADERS: dict[str, str] = field(default_factory=lambda : {
+    DRIVE_REQ_HEADERS: dict[str, str] = field(default_factory=lambda : {
         "User-Agent": 
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36",
         "referer": 
-            "https://cultureddownloader.com/query"
+            "https://api.cultureddownloader.com/drive/query"
     })
 
     # For caching

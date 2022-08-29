@@ -44,12 +44,11 @@ class GCP_KMS:
         except:
             ciphertextToLog = "Could not url-safe base64 encode the ciphertext..."
 
-        CLOUD_LOGGER.write_log_entry(
-            logMessage={
+        CLOUD_LOGGER.info(
+            content={
                 "Decryption Error": str(error),
                 "URL-base64 Encoded Ciphertext": ciphertextToLog
-            },
-            severity="INFO"
+            }
         )
         raise DecryptionError("Asymmetric Decryption failed.")
 
