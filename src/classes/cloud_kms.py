@@ -76,7 +76,10 @@ class GCP_KMS:
         # Since GCP KMS RNG Cloud HSM's minimum length is 8 bytes, 
         # fallback to secrets library if nBytes is less than 8
         if (generateFromHSM and nBytes < 8):
-            warnings.warn("GCP KMS does not accept nBytes less than 8, falling back to secrets library...")
+            warnings.warn(
+                message="GCP KMS does not accept nBytes less than 8, falling back to secrets library...",
+                category=RuntimeWarning
+            )
             generateFromHSM = False
 
         if (not generateFromHSM):

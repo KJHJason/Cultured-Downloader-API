@@ -32,4 +32,4 @@ ENV PORT 8080
 # to be equal to the cores available.
 # Timeout is set to 0 to disable the timeouts of the workers to allow Cloud Run to handle instance scaling
 # <filename>:<flask app variable name> which in this case is app:app
-CMD exec hypercorn --bind 0.0.0.0:$PORT --workers 2 --keep_alive 0 app:app
+CMD exec hypercorn --bind 0.0.0.0:$PORT --workers 4 --keep_alive 0 app:app
