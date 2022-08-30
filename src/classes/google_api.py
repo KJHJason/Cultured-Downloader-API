@@ -71,8 +71,8 @@ class GoogleDrive(GoogleOAuth2):
             try:
                 response = self.__DRIVE_SERVICE.files().list(
                     q=" ".join((f"'{folder_id}' in parents and", self.__QUERY)),
-                    fields="nextPageToken, files(id, name, mimeType)",
-                    page_token=page_token
+                    fields="nextPageToken, files(kind, id, name, mimeType)",
+                    pageToken=page_token
                 ).execute()
             except (HttpError) as e:
                 CLOUD_LOGGER.warning(

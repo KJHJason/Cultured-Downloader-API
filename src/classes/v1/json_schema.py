@@ -40,14 +40,33 @@ class CookieJsonResponse(BaseModel):
     after encryption/decryption of their sent cookie data."""
     cookie: str
 
+@enum.unique
+class GDriveAttachmentType(str, enum.Enum):
+    """Supported attachment type when quering Google Drive API."""
+    FILE = "file"
+    FOLDER = "folder"
+
 class GDriveJsonPayload(BaseModel):
     """The JSON payload schema for the user
     when querying the Google Drive API."""
     drive_id: str
-    attachment_type: str
+    attachment_type: GDriveAttachmentType
+
+class FileDetails(BaseModel):
+    """The JSON schema for the file details
+    when querying the Google Drive API."""
+    kind: str
+    id: str
+    name: str
+    mimeType: str
+
+class FileError(BaseModel):
+    """The JSON schema for the error message
+    when the query encountered errors such as file not found."""
+    error: dict
 
 class GDriveJsonResponse(BaseModel):
     """The response to be sent back to the user after
     querying the Google Drive API."""
-    directory: list | None = None
-    file: dict | None = None
+    directory: list[FileDetails] | None = None
+    file: FileDetails | FileError | None = None

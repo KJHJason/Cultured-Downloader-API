@@ -63,9 +63,6 @@ async def google_drive_query(request: Request, dataPayload: GDriveJsonPayload):
         content=f"User {get_user_ip(request)}: Queried [{gdrive_type}, {query_id}]"
     )
 
-    if (gdrive_type != "file" and gdrive_type != "folder"):
-        raise APIBadRequest(error="invalid attachment type")
-
     gdrive = GoogleDrive()
     if (gdrive_type == "file"):
         return await gdrive.get_file_details(query_id)
