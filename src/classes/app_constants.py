@@ -5,9 +5,8 @@ from dataclasses import dataclass, field
 @dataclass(frozen=True, repr=False)
 class AppConstants:
     """This dataclass is used to store all the constants used in the application."""
-    DEBUG_MODE: bool = True
-    LATEST_VER: str = "v1"
-    VER_ONE: str = "v1"
+    # API constants
+    DEBUG_MODE: bool = True # TODO: Change this to False when deploying to production
     API_TITLE: str = "Cultured Downloader API",
     FAVICON_URL: str = "/favicon.ico"
     API_RESPONSES: dict = field(
@@ -17,8 +16,10 @@ class AppConstants:
         }
     )
 
-    # For API documentations URLs
+    # For API documentations
     # https://fastapi.tiangolo.com/advanced/extending-openapi/
+    LATEST_VER: str = "v1"
+    VER_ONE: str = "v1"
     DOCS_URL: str = "/docs"
     REDOC_URL: str = "/redoc"
     OPENAPI_JSON_URL: str = "/openapi.json"
