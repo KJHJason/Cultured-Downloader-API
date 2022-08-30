@@ -1,8 +1,8 @@
 # import third-party libraries
+import httpx
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import aiohttp
 
 # import Python's standard libraries
 import json
@@ -112,21 +112,16 @@ class GoogleDrive(GoogleOAuth2):
                 The json representation of the file's details
         """
         gdrive_api_token = SECRET_MANAGER.get_secret_payload(secret_id="gdrive-api-token")
-        async with aiohttp.ClientSession(headers=AC.DRIVE_REQ_HEADERS) as session:
+        async with httpx.AsyncClient(headers=AC.DRIVE_REQ_HEADERS, http2=True) as client:
             try:
                 url = f"https://www.googleapis.com/drive/v3/files/{file_id}?key={gdrive_api_token}"
-                async with session.get(url=url) as response:
-                    json_response = await response.json()
-                    return {"file": json_response}
+                json_response = await client.get(url=url)
+                return {"file": json_response.json()}
             except (
-                aiohttp.ClientConnectionError, 
-                aiohttp.ClientConnectorError, 
-                aiohttp.ServerConnectionError,
-                aiohttp.ClientSSLError,
-                aiohttp.ClientResponseError,
-                aiohttp.ContentTypeError,
-                aiohttp.TooManyRedirects,
-                aiohttp.ClientPayloadError
+                httpx.RequestError,
+                httpx.HTTPStatusError,
+                httpx.HTTPError,
+                httpx.StreamError
             ) as e:
                 CLOUD_LOGGER.warning(
                     content={
