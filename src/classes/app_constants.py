@@ -7,12 +7,12 @@ class AppConstants:
     """This dataclass is used to store all the constants used in the application."""
     # API constants
     DEBUG_MODE: bool = True # TODO: Change this to False when deploying to production
-    API_TITLE: str = "Cultured Downloader API",
     FAVICON_URL: str = "/favicon.ico"
     API_RESPONSES: dict = field(
         default_factory=lambda: {
             404: {"404": "Not found"},
-            418: {"418": "I'm a teapot"}
+            418: {"418": "I'm a teapot"},
+            429: {"429": "Too many requests"}
         }
     )
 
@@ -26,9 +26,9 @@ class AppConstants:
     VER_ONE_OPENAPI_JSON_URL: str = f"/{VER_ONE}{OPENAPI_JSON_URL}"
 
     # For encrypting/decrypting the saved user's cookie data
-    RSA_KEY_ID: str = "asymmetric-key"
-    RSA_VERSION_SECRET_ID: str = "asymmetric-key-ver"
-    COOKIE_ENCRYPTION_KEY: str = "cookie-key"
+    RSA_KEY_ID: str = "rsa-4096-key"
+    RSA_VERSION_SECRET_ID: str = "rsa-4096-key-ver"
+    COOKIE_ENCRYPTION_KEY: str = "cookie-aes-key"
 
     # For the Google Drive API
     DRIVE_REQ_HEADERS: dict[str, str] = field(

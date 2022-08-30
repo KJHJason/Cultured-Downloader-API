@@ -4,6 +4,10 @@ setuptools>=60.1.0
 # For FastAPI Application
 fastapi>=0.81.0
 
+# Other useful dependencies
+# used in the Flask web app
+aiohttp>=3.8.1
+
 # For integrity checks
 google-crc32c>=1.3.0
 

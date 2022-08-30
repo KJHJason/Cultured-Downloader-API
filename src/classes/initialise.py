@@ -1,9 +1,9 @@
 # import Python's standard libraries
 import pathlib
 from dataclasses import dataclass
-from six import ensure_binary
 
 # import third-party libraries
+from six import ensure_binary
 from google_crc32c import Checksum as g_crc32c
 
 def crc32c(data: bytes | str) -> int:

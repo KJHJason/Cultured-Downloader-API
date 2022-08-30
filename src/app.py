@@ -1,6 +1,5 @@
 # import third-party libraries
 from fastapi import FastAPI, Request
-from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 # import Google Cloud Logging API (third-party library)
 from google.cloud import logging as gcp_logging
@@ -18,7 +17,6 @@ from routers import api_v1, general
 
 app = FastAPI(
     debug=APP_CONSTANTS.DEBUG_MODE,
-    title=APP_CONSTANTS.API_TITLE,
     version=APP_CONSTANTS.LATEST_VER,
     docs_url=None,
     redoc_url=None,
@@ -27,27 +25,15 @@ app = FastAPI(
     responses=APP_CONSTANTS.API_RESPONSES
 )
 
-# Sets some global variables for the API
-# accessible through request.app.config["VARIABLE_NAME"]
-app.config = {
-    "APP_CONSTANTS": APP_CONSTANTS,
-    "CLOUD_LOGGER": CLOUD_LOGGER,
-}
-
-# Redirects all HTTP requests to HTTPS requests
-# if the API is running on a production server
-if (not APP_CONSTANTS.DEBUG_MODE):
-    app.add_middleware(HTTPSRedirectMiddleware)
-
 # Add cache headers to the specified routes
-TEN_MINS_CACHE = "public, max-age=600"
 ONE_YEAR_CACHE = "public, max-age=31536000"
 ONE_DAY_CACHE = "public, max-age=86400"
 app.add_middleware(
     CacheControlMiddleware, 
     routes=(
-        CacheControlURLRule(path="/", cacheControl=TEN_MINS_CACHE),
+        CacheControlURLRule(path="/", cacheControl=ONE_DAY_CACHE),
         CacheControlURLRule(path="/favicon.ico", cacheControl=ONE_YEAR_CACHE),
+        CacheControlURLRule(path=re.compile(r"^\/v1\/(rsa)\/public-key$"), cacheControl=ONE_DAY_CACHE),
         CacheControlURLRule(path=re.compile(r"^\/v\d+\/docs$"), cacheControl=ONE_DAY_CACHE),
         CacheControlURLRule(path=re.compile(r"^\/v\d+\/redoc$"), cacheControl=ONE_DAY_CACHE),
         CacheControlURLRule(path=re.compile(r"^\/v\d+\/openapi\.json$"), cacheControl=ONE_DAY_CACHE)

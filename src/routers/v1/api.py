@@ -1,18 +1,18 @@
 # import third-party libraries
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
 # import local python libraries
 from functions import get_user_ip
-from classes import USER_COOKIE, GoogleDrive, APIBadRequest, PrettyJSONResponse, APP_CONSTANTS
+from classes import USER_COOKIE, GoogleDrive, APIBadRequest, PrettyJSONResponse, APP_CONSTANTS, CLOUD_LOGGER
 from classes.v1 import  CookieJsonPayload, GDriveJsonPayload, \
-                        CookieJsonResponse, PublicKeyResponse, GDriveJsonResponse
+                        CookieJsonResponse, GDriveJsonResponse, PublicKeyResponse, PublicKeyAlgorithm
 from classes.exceptions import CRC32ChecksumError, DecryptionError
 
 api = FastAPI(
     debug=APP_CONSTANTS.DEBUG_MODE,
-    title=APP_CONSTANTS.API_TITLE,
+    title="Cultured Downloader API",
     version=APP_CONSTANTS.VER_ONE,
     docs_url=None,
     redoc_url=None,
@@ -59,7 +59,7 @@ async def google_drive_query(request: Request, dataPayload: GDriveJsonPayload):
     queryID = dataPayload.drive_id
     gdriveType = dataPayload.attachment_type
 
-    request.app.config["CLOUD_LOGGER"].info(
+    CLOUD_LOGGER.info(
         content=f"User {get_user_ip(request)}: Queried [{gdriveType}, {queryID}]"
     )
 
@@ -73,25 +73,22 @@ async def google_drive_query(request: Request, dataPayload: GDriveJsonPayload):
         return gdrive.get_folder_contents(queryID)
 
 @api.get(
-    path="/public-key",
+    path="/{algorithm}/public-key",
     description="Get the public key for secure communication when transmitting the user's data on top of HTTPS",
     response_model=PublicKeyResponse,
     response_class=PrettyJSONResponse,
     include_in_schema=True
 )
-async def get_public_key(request: Request, algorithm: str | None = Query(default="rsa", max_length=10)):
+async def get_public_key(request: Request, algorithm: PublicKeyAlgorithm):
     algorithm = algorithm.lower()
 
-    request.app.config["CLOUD_LOGGER"].info(
+    CLOUD_LOGGER.info(
         content=f"User {get_user_ip(request)}: Retrieved the public key (algorithm: {algorithm})]"
     )
 
-    if (algorithm == "rsa"):
-        return {"public_key": USER_COOKIE.get_api_public_key()}
-    else:
-        raise APIBadRequest(
-            error={"error": "invalid algorithm...", "supported_algorithms": ["rsa"]}
-        )
+    # if (algorithm == "rsa"):  # commented it out since only RSA is supported and the
+                                # path parameter will be validated via the PublicKeyAlgorithm class
+    return {"public_key": USER_COOKIE.get_api_public_key()}
 
 @api.post(
     path="/encrypt-cookie", 
@@ -101,7 +98,7 @@ async def get_public_key(request: Request, algorithm: str | None = Query(default
     include_in_schema=True
 )
 async def encrypt_cookie(request: Request, jsonPayload: CookieJsonPayload):
-    request.app.config["CLOUD_LOGGER"].info(
+    CLOUD_LOGGER.info(
         content={
             "message": f"User {get_user_ip(request)}: Encrypted the cookie",
             "cookie": "REDACTED",
@@ -131,7 +128,7 @@ async def encrypt_cookie(request: Request, jsonPayload: CookieJsonPayload):
     include_in_schema=True
 )
 async def decrypt_cookie(request: Request, jsonPayload: CookieJsonPayload):
-    request.app.config["CLOUD_LOGGER"].info(
+    CLOUD_LOGGER.info(
         content={
             "message": f"User {get_user_ip(request)}: Decrypted the cookie",
             "cookie": "REDACTED",

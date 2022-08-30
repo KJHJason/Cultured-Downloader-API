@@ -37,7 +37,7 @@ class GCP_KMS:
         self.__KMS_CLIENT = kms.KeyManagementServiceClient.from_service_account_info(
             info=json.loads(SECRET_MANAGER.get_secret_payload(secretID="google-kms"))
         )
-        self.__KEY_RING_ID = "dev" if (AC.DEBUG_MODE) else "web-app"
+        self.__KEY_RING_ID = "api-sg"
 
     def log_failed_decryption(self, ciphertext: bytes, error: Any) -> None:
         """Logs the failed decryption attempt to the Cloud Logger and raise DecryptionError."""
