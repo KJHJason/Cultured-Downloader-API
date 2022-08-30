@@ -56,25 +56,26 @@ async def redoc_html():
     include_in_schema=True
 )
 async def google_drive_query(request: Request, dataPayload: GDriveJsonPayload):
-    queryID = dataPayload.drive_id
-    gdriveType = dataPayload.attachment_type
+    query_id = dataPayload.drive_id
+    gdrive_type = dataPayload.attachment_type
 
     CLOUD_LOGGER.info(
-        content=f"User {get_user_ip(request)}: Queried [{gdriveType}, {queryID}]"
+        content=f"User {get_user_ip(request)}: Queried [{gdrive_type}, {query_id}]"
     )
 
-    if (gdriveType != "file" and gdriveType != "folder"):
+    if (gdrive_type != "file" and gdrive_type != "folder"):
         raise APIBadRequest(error="invalid attachment type")
 
     gdrive = GoogleDrive()
-    if (gdriveType == "file"):
-        return await gdrive.get_file_details(queryID)
+    if (gdrive_type == "file"):
+        return await gdrive.get_file_details(query_id)
     else:
-        return gdrive.get_folder_contents(queryID)
+        return gdrive.get_folder_contents(query_id)
 
 @api.get(
     path="/{algorithm}/public-key",
     description="Get the public key for secure communication when transmitting the user's data on top of HTTPS",
+    summary="Available algorithm: RSA4096-OAEP-SHA512",
     response_model=PublicKeyResponse,
     response_class=PrettyJSONResponse,
     include_in_schema=True
@@ -88,7 +89,7 @@ async def get_public_key(request: Request, algorithm: PublicKeyAlgorithm):
 
     # if (algorithm == "rsa"):  # commented it out since only RSA is supported and the
                                 # path parameter will be validated via the PublicKeyAlgorithm class
-    return {"public_key": USER_COOKIE.get_api_public_key()}
+    return {"public_key": USER_COOKIE.get_api_rsa_public_key()}
 
 @api.post(
     path="/encrypt-cookie", 
@@ -97,28 +98,29 @@ async def get_public_key(request: Request, algorithm: PublicKeyAlgorithm):
     response_class=PrettyJSONResponse,
     include_in_schema=True
 )
-async def encrypt_cookie(request: Request, jsonPayload: CookieJsonPayload):
+async def encrypt_cookie(request: Request, json_payload: CookieJsonPayload):
     CLOUD_LOGGER.info(
         content={
             "message": f"User {get_user_ip(request)}: Encrypted the cookie",
             "cookie": "REDACTED",
-            "public_key": jsonPayload.public_key
+            "public_key": json_payload.public_key
         }
     )
 
-    cookiePayload = USER_COOKIE.decrypt_cookie_payload(jsonPayload.cookie)
-    if ("error" in cookiePayload):
-        raise APIBadRequest(error=cookiePayload)
+    cookie_payload = USER_COOKIE.decrypt_cookie_payload(json_payload.cookie)
+    if ("error" in cookie_payload):
+        raise APIBadRequest(error=cookie_payload)
 
     try:
-        encryptedCookieData = USER_COOKIE.encrypt_cookie_data(
-            cookieData=cookiePayload["payload"],
-            userPublicKey=jsonPayload.public_key
+        encrypted_cookie_data = USER_COOKIE.encrypt_cookie_data(
+            cookie_data=cookie_payload["payload"],
+            user_public_key=json_payload.public_key,
+            digest_method=json_payload.digest_method
         )
     except (CRC32ChecksumError):
         raise APIBadRequest(error="integrity checks failed.")
 
-    return {"cookie": encryptedCookieData}
+    return {"cookie": encrypted_cookie_data}
 
 @api.post(
     path="/decrypt-cookie",
@@ -127,23 +129,24 @@ async def encrypt_cookie(request: Request, jsonPayload: CookieJsonPayload):
     response_class=PrettyJSONResponse,
     include_in_schema=True
 )
-async def decrypt_cookie(request: Request, jsonPayload: CookieJsonPayload):
+async def decrypt_cookie(request: Request, json_payload: CookieJsonPayload):
     CLOUD_LOGGER.info(
         content={
             "message": f"User {get_user_ip(request)}: Decrypted the cookie",
             "cookie": "REDACTED",
-            "public_key": jsonPayload.public_key
+            "public_key": json_payload.public_key
         }
     )
 
-    encryptedCookiePayload = USER_COOKIE.decrypt_cookie_payload(jsonPayload.cookie)
-    if ("error" in encryptedCookiePayload):
-        raise APIBadRequest(error=encryptedCookiePayload)
+    encrypted_cookie_payload = USER_COOKIE.decrypt_cookie_payload(json_payload.cookie)
+    if ("error" in encrypted_cookie_payload):
+        raise APIBadRequest(error=encrypted_cookie_payload)
 
     try:
         decryptedCookieData = USER_COOKIE.decrypt_cookie_data(
-            encryptedCookieData=encryptedCookiePayload["payload"], 
-            userPublicKey=jsonPayload.public_key
+            encrypted_cookie_data=encrypted_cookie_payload["payload"], 
+            user_public_key=json_payload.public_key,
+            digest_method=json_payload.digest_method
         )
     except (TypeError):
         raise APIBadRequest(error="encrypted cookie must be in bytes.")

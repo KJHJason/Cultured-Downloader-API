@@ -9,8 +9,8 @@ import re
 import logging
 
 # import local python libraries
-from classes import APP_CONSTANTS, CLOUD_LOGGER, PrettyJSONResponse, \
-                    CacheControlMiddleware, CacheControlURLRule, APIBadRequest
+from classes import APP_CONSTANTS, CLOUD_LOGGER, \
+                    CacheControlMiddleware, CacheControlURLRule, add_exception_handlers
 from routers import api_v1, general
 
 """--------------------------- Start of API Configuration ---------------------------"""
@@ -31,19 +31,18 @@ ONE_DAY_CACHE = "public, max-age=86400"
 app.add_middleware(
     CacheControlMiddleware, 
     routes=(
-        CacheControlURLRule(path="/", cacheControl=ONE_DAY_CACHE),
-        CacheControlURLRule(path="/favicon.ico", cacheControl=ONE_YEAR_CACHE),
-        CacheControlURLRule(path=re.compile(r"^\/v1\/(rsa)\/public-key$"), cacheControl=ONE_DAY_CACHE),
-        CacheControlURLRule(path=re.compile(r"^\/v\d+\/docs$"), cacheControl=ONE_DAY_CACHE),
-        CacheControlURLRule(path=re.compile(r"^\/v\d+\/redoc$"), cacheControl=ONE_DAY_CACHE),
-        CacheControlURLRule(path=re.compile(r"^\/v\d+\/openapi\.json$"), cacheControl=ONE_DAY_CACHE)
+        CacheControlURLRule(path="/", cache_control=ONE_DAY_CACHE),
+        CacheControlURLRule(path="/favicon.ico", cache_control=ONE_YEAR_CACHE),
+        CacheControlURLRule(path=re.compile(r"^\/v1\/(rsa)\/public-key$"), cache_control=ONE_DAY_CACHE),
+        CacheControlURLRule(path=re.compile(r"^\/v\d+\/docs$"), cache_control=ONE_DAY_CACHE),
+        CacheControlURLRule(path=re.compile(r"^\/v\d+\/redoc$"), cache_control=ONE_DAY_CACHE),
+        CacheControlURLRule(path=re.compile(r"^\/v\d+\/openapi\.json$"), cache_control=ONE_DAY_CACHE)
     )
 )
 
 # Add custom exception handlers
-@app.exception_handler(APIBadRequest)
-async def api_bad_request_handler(request: Request, exc: APIBadRequest):
-    return PrettyJSONResponse(content=exc.error, status_code=exc.code)
+add_exception_handlers(app=app)
+add_exception_handlers(app=api_v1)
 
 # Integrate Google CLoud Logging to the API
 gcp_logging.handlers.setup_logging(CLOUD_LOGGER.GOOGLE_LOGGING_HANDLER)

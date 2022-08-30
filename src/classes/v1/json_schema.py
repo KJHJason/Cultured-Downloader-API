@@ -1,5 +1,8 @@
 # import third-party libraries
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+# import Python's standard libraries
+import enum
 
 class Index(BaseModel):
     """The API's index page JSON schema response."""
@@ -15,11 +18,22 @@ class PublicKeyResponse(BaseModel):
     the user requests to see the server's public key."""
     public_key: str
 
+@enum.unique
+class HashAlgorithms(str, enum.Enum):
+    """Supported digest methods for the API."""
+    SHA1 = "sha1"
+    SHA256 = "sha256"
+    SHA512 = "sha512"
+
 class CookieJsonPayload(BaseModel):
     """The JSON payload schema for the user when
     sending their cookie for encryption/decryption."""
     cookie: str
     public_key: str
+    digest_method: HashAlgorithms | None = Field(
+        default=HashAlgorithms.SHA512,
+        description="The digest method to use when encrypting the response with the user's public key."
+    )
 
 class CookieJsonResponse(BaseModel):
     """The response to be sent back to the user

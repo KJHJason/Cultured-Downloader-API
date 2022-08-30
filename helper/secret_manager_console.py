@@ -164,7 +164,7 @@ def generate_new_oauth_token() -> None:
             secretID=C.OAUTH_TOKEN_SECRET_NAME,
             secret=creds.to_json(),
             destroyPastVer=destroyAllPastVer,
-            destroyOptimise=True
+            destroy_optimise=True
         )
         print(f"\rNew secret version, {C.OAUTH_TOKEN_SECRET_NAME}, created:", response.name)
 
@@ -234,7 +234,7 @@ X. Back to main menu
                     generateFromHSM=True
                 ),
                 destroyPastVer=destroyAllPastVer,
-                destroyOptimise=True
+                destroy_optimise=True
             )
             print(f"\rGenerated the new Flask secret key at \"{response.name}\"!", end="\n\n")
 
@@ -273,7 +273,7 @@ X. Back to main menu
                     generateFromHSM=True
                 ),
                 destroyPastVer=destroyAllPastVer,
-                destroyOptimise=True
+                destroy_optimise=True
             )
             print("Generated a new Flask session salt!")
 
