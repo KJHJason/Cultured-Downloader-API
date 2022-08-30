@@ -6,16 +6,18 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 
 # import Python's standard libraries
 import json
+import re
 from typing import Any
 
 class PrettyJSONResponse(JSONResponse):
+    """Returns the JSON response with proper indentations"""
     def render(self, content: Any) -> bytes:
         return json.dumps(
             obj=content,
             ensure_ascii=False,
             allow_nan=False,
             indent=4,
-            separators=(",", ":"),
+            separators=(", ", ": "),
         ).encode("utf-8")
 
 class APIBadRequest(Exception):
@@ -45,7 +47,7 @@ class CacheControlURLRule:
         """Configure the cache control headers for a particular route URL
 
         Attributes:
-            path (str): 
+            path (str|re.Pattern): 
                 The url path of the route
             cacheControl (str): 
                 The cache control headers for the route
@@ -54,7 +56,7 @@ class CacheControlURLRule:
         self.__cacheControl = cacheControl
 
     @property
-    def path(self) -> str:
+    def path(self) -> str | re.Pattern:
         """The url path of the route"""
         return self.__path
 
@@ -89,7 +91,10 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         userReqPath = request.url.path
         for route in self.__routes:
-            if (userReqPath == route.path):
+            if (
+                (isinstance(route.path, str) and userReqPath == route.path) ^ 
+                (isinstance(route.path, re.Pattern) and route.path.match(userReqPath) is not None)
+            ):
                 response.headers["Cache-Control"] = route.cacheControl
                 break
         else:

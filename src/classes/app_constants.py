@@ -2,17 +2,27 @@
 import re
 from dataclasses import dataclass, field
 
-# import local python libraries
-if (__package__ is None or __package__ == ""):
-    from secret_manager import SECRET_MANAGER
-else:
-    from .secret_manager import SECRET_MANAGER
-
 @dataclass(frozen=True, repr=False)
 class AppConstants:
     """This dataclass is used to store all the constants used in the application."""
-    LATEST_VER: str = "v1"
     DEBUG_MODE: bool = True
+    LATEST_VER: str = "v1"
+    VER_ONE: str = "v1"
+    API_TITLE: str = "Cultured Downloader API",
+    FAVICON_URL: str = "/favicon.ico"
+    API_RESPONSES: dict = field(
+        default_factory=lambda: {
+            404: {"404": "Not found"},
+            418: {"418": "I'm a teapot"}
+        }
+    )
+
+    # For API documentations URLs
+    # https://fastapi.tiangolo.com/advanced/extending-openapi/
+    DOCS_URL: str = "/docs"
+    REDOC_URL: str = "/redoc"
+    OPENAPI_JSON_URL: str = "/openapi.json"
+    VER_ONE_OPENAPI_JSON_URL: str = f"/{VER_ONE}{OPENAPI_JSON_URL}"
 
     # For encrypting/decrypting the saved user's cookie data
     RSA_KEY_ID: str = "asymmetric-key"
@@ -20,12 +30,14 @@ class AppConstants:
     COOKIE_ENCRYPTION_KEY: str = "cookie-key"
 
     # For the Google Drive API
-    DRIVE_REQ_HEADERS: dict[str, str] = field(default_factory=lambda : {
-        "User-Agent": 
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36",
-        "referer": 
-            "https://api.cultureddownloader.com/drive/query"
-    })
+    DRIVE_REQ_HEADERS: dict[str, str] = field(
+        default_factory=lambda : {
+            "User-Agent": 
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36",
+            "referer": 
+                "https://api.cultureddownloader.com/drive/query"
+        }
+    )
 
     # For caching
     BLUEPRINT_ENDPOINT_REGEX: re.Pattern[str] = re.compile(r"^[\w]+(.)[\w]+$")

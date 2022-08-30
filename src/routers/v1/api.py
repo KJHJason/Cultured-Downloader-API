@@ -1,19 +1,59 @@
 # import third-party libraries
-from fastapi import APIRouter, Query, Request
+from fastapi import FastAPI, Query, Request
+from fastapi.responses import HTMLResponse
+from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
 # import local python libraries
 from functions import get_user_ip
-from classes import USER_COOKIE, CookieJsonPayload, GDriveJsonPayload, PrettyJSONResponse, \
-                    CookieJsonResponse, PublicKeyResponse, GoogleDrive, GDriveJsonResponse, APIBadRequest
+from classes import USER_COOKIE, GoogleDrive, APIBadRequest, PrettyJSONResponse, APP_CONSTANTS
+from classes.v1 import  CookieJsonPayload, GDriveJsonPayload, \
+                        CookieJsonResponse, PublicKeyResponse, GDriveJsonResponse
 from classes.exceptions import CRC32ChecksumError, DecryptionError
 
-api = APIRouter(prefix="/v1")
+api = FastAPI(
+    debug=APP_CONSTANTS.DEBUG_MODE,
+    title=APP_CONSTANTS.API_TITLE,
+    version=APP_CONSTANTS.VER_ONE,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=APP_CONSTANTS.OPENAPI_JSON_URL,
+    swagger_ui_oauth2_redirect_url=None,
+    responses=APP_CONSTANTS.API_RESPONSES
+)
+
+@api.get(
+    path=APP_CONSTANTS.DOCS_URL,
+    response_class=HTMLResponse,
+    include_in_schema=False
+)
+async def swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url=APP_CONSTANTS.VER_ONE_OPENAPI_JSON_URL,
+        title=f"{api.title} - Swagger UI",
+        oauth2_redirect_url=None,
+        init_oauth=api.swagger_ui_init_oauth,
+        swagger_favicon_url=APP_CONSTANTS.FAVICON_URL,
+        swagger_ui_parameters=api.swagger_ui_parameters,
+    )
+
+@api.get(
+    path=APP_CONSTANTS.REDOC_URL,
+    response_class=HTMLResponse,
+    include_in_schema=False
+)
+async def redoc_html():
+    return get_redoc_html(
+        openapi_url=APP_CONSTANTS.VER_ONE_OPENAPI_JSON_URL,
+        title=f"{api.title} - ReDoc",
+        redoc_favicon_url=APP_CONSTANTS.FAVICON_URL
+    )
 
 @api.post(
     path="/drive/query",
-    description="Query Google Drive API to get the file details or all the files in a folder",
+    description="Query Google Drive API to get the file details or all the files in a folder. Note that files or folders that has a resource key will not work and will return an empty JSON response.",
     response_model=GDriveJsonResponse,
-    response_class=PrettyJSONResponse
+    response_class=PrettyJSONResponse,
+    include_in_schema=True
 )
 async def google_drive_query(request: Request, dataPayload: GDriveJsonPayload):
     queryID = dataPayload.drive_id
@@ -36,7 +76,8 @@ async def google_drive_query(request: Request, dataPayload: GDriveJsonPayload):
     path="/public-key",
     description="Get the public key for secure communication when transmitting the user's data on top of HTTPS",
     response_model=PublicKeyResponse,
-    response_class=PrettyJSONResponse
+    response_class=PrettyJSONResponse,
+    include_in_schema=True
 )
 async def get_public_key(request: Request, algorithm: str | None = Query(default="rsa", max_length=10)):
     algorithm = algorithm.lower()
@@ -56,7 +97,8 @@ async def get_public_key(request: Request, algorithm: str | None = Query(default
     path="/encrypt-cookie", 
     description="Encrypts the user's cookie with the server's symmetric key",
     response_model=CookieJsonResponse,
-    response_class=PrettyJSONResponse
+    response_class=PrettyJSONResponse,
+    include_in_schema=True
 )
 async def encrypt_cookie(request: Request, jsonPayload: CookieJsonPayload):
     request.app.config["CLOUD_LOGGER"].info(
@@ -85,7 +127,8 @@ async def encrypt_cookie(request: Request, jsonPayload: CookieJsonPayload):
     path="/decrypt-cookie",
     description="Decrypts the user's cookie with the server's symmetric key",
     response_model=CookieJsonResponse,
-    response_class=PrettyJSONResponse
+    response_class=PrettyJSONResponse,
+    include_in_schema=True
 )
 async def decrypt_cookie(request: Request, jsonPayload: CookieJsonPayload):
     request.app.config["CLOUD_LOGGER"].info(

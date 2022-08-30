@@ -20,6 +20,8 @@ else:
     from .cloud_logger import CLOUD_LOGGER
 
 class GoogleOAuth2:
+    """Creates the base Google API service object that can be used for creating
+    authenticated API calls to other Google APIs that requires Google OAuth2 authentication"""
     def __init__(self) -> None:
         self.__CREDENTIALS = Credentials.from_authorized_user_info(
             info=json.loads(
@@ -32,9 +34,13 @@ class GoogleOAuth2:
 
     @property
     def CREDENTIALS(self) -> Credentials:
+        """Returns the credentials object that can be used to build other 
+        authenticated Google API objects via the googleapiclient.discovery.build function"""
         return self.__CREDENTIALS
 
 class GoogleDrive(GoogleOAuth2):
+    """Creates an authenticated Google Drive Client that 
+    can be used for communicating with Google Drive API v3."""
     def __init__(self) -> None:
         super().__init__()
         self.__DRIVE_SERVICE = build(

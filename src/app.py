@@ -1,12 +1,12 @@
 # import third-party libraries
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 # import Google Cloud Logging API (third-party library)
 from google.cloud import logging as gcp_logging
 
 # import Python's standard libraries
+import re
 import logging
 
 # import local python libraries
@@ -18,15 +18,13 @@ from routers import api_v1, general
 
 app = FastAPI(
     debug=APP_CONSTANTS.DEBUG_MODE,
-    title="Cultured Downloader API",
+    title=APP_CONSTANTS.API_TITLE,
     version=APP_CONSTANTS.LATEST_VER,
-    docs_url="/latest/docs",
-    redoc_url="/latest/redoc",
-    openapi_url="/latest/openapi.json",
-    responses={
-        404: {"404": "Not found"},
-        418: {"418": "I'm a teapot"}
-    }
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+    swagger_ui_oauth2_redirect_url=None,
+    responses=APP_CONSTANTS.API_RESPONSES
 )
 
 # Sets some global variables for the API
@@ -44,11 +42,15 @@ if (not APP_CONSTANTS.DEBUG_MODE):
 # Add cache headers to the specified routes
 TEN_MINS_CACHE = "public, max-age=600"
 ONE_YEAR_CACHE = "public, max-age=31536000"
+ONE_DAY_CACHE = "public, max-age=86400"
 app.add_middleware(
     CacheControlMiddleware, 
     routes=(
         CacheControlURLRule(path="/", cacheControl=TEN_MINS_CACHE),
         CacheControlURLRule(path="/favicon.ico", cacheControl=ONE_YEAR_CACHE),
+        CacheControlURLRule(path=re.compile(r"^\/v\d+\/docs$"), cacheControl=ONE_DAY_CACHE),
+        CacheControlURLRule(path=re.compile(r"^\/v\d+\/redoc$"), cacheControl=ONE_DAY_CACHE),
+        CacheControlURLRule(path=re.compile(r"^\/v\d+\/openapi\.json$"), cacheControl=ONE_DAY_CACHE)
     )
 )
 
@@ -65,10 +67,17 @@ logging.getLogger().setLevel(logging.INFO)
 
 """--------------------------- Start of API Routes ---------------------------"""
 
+# For mounting the routes to the main API
+# similar to Flask's Blueprint module
 app.include_router(general)
-app.include_router(api_v1)  # For adding several APIs on top of the latest ver...
-                            # https://fastapi.tiangolo.com/advanced/sub-applications/
-                            # https://github.com/tiangolo/fastapi/issues/2806
+
+# For adding several APIs on top of the main API...
+# https://fastapi.tiangolo.com/advanced/sub-applications/
+# https://github.com/tiangolo/fastapi/issues/2806
+app.mount(
+    path="/v1", 
+    app=api_v1
+)
 
 """--------------------------- End of API Routes ---------------------------"""
 
