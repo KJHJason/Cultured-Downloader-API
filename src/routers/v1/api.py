@@ -5,10 +5,13 @@ from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
 # import local python libraries
 from functions import get_user_ip
-from classes import USER_COOKIE, GoogleDrive, APIBadRequest, PrettyJSONResponse, APP_CONSTANTS, CLOUD_LOGGER
-from classes.v1 import  CookieJsonPayload, GDriveJsonPayload, \
-                        CookieJsonResponse, GDriveJsonResponse, PublicKeyResponse, PublicKeyAlgorithm
+from functions.v1 import format_gdrive_json_response, format_file_json_responses, format_directory_json_response, format_directory_json_responses
+from classes import USER_DATA, GoogleDrive, APIException, PrettyJSONResponse, APP_CONSTANTS, CLOUD_LOGGER
+from classes.v1 import UserDataJsonRequest, UserDataJsonResponse, GDriveJsonRequest, PublicKeyResponse, PublicKeyRequest
 from classes.exceptions import CRC32ChecksumError, DecryptionError
+
+# import Python's standard libraries
+import asyncio
 
 api = FastAPI(
     debug=APP_CONSTANTS.DEBUG_MODE,
@@ -51,105 +54,130 @@ async def redoc_html():
 @api.post(
     path="/drive/query",
     description="Query Google Drive API to get the file details or all the files in a folder. Note that files or folders that has a resource key will not work and will return an empty JSON response.",
-    response_model=GDriveJsonResponse,
     response_class=PrettyJSONResponse,
     include_in_schema=True
 )
-async def google_drive_query(request: Request, dataPayload: GDriveJsonPayload):
-    query_id = dataPayload.drive_id
-    gdrive_type = dataPayload.attachment_type
+async def google_drive_query(request: Request, data_payload: GDriveJsonRequest):
+    query_id = data_payload.drive_id
+    gdrive_type = data_payload.attachment_type
 
     CLOUD_LOGGER.info(
         content=f"User {get_user_ip(request)}: Queried [{gdrive_type}, {query_id}]"
     )
 
     gdrive = GoogleDrive()
+    request_headers = APP_CONSTANTS.DRIVE_REQ_HEADERS.copy()
+    request_headers["Authorization"] = f"Bearer {gdrive.get_oauth_access_token()}"
     if (gdrive_type == "file"):
-        return await gdrive.get_file_details(query_id)
+        if (isinstance(query_id, str)):
+            file_details = await gdrive.get_file_details(file_id=query_id, headers=request_headers)
+            return format_gdrive_json_response(file_details)
+        else:
+            file_arr = await asyncio.gather(*[
+                gdrive.get_file_details(file_id=file_id, headers=request_headers) for file_id in query_id
+            ])
+            return format_file_json_responses(file_arr)
     else:
-        return gdrive.get_folder_contents(query_id)
+        if (isinstance(query_id, str)):
+            directory_content = await gdrive.get_folder_contents(folder_id=query_id, headers=request_headers)
+            return format_directory_json_response(directory_content)
+        else:
+            directory_arr = await asyncio.gather(*[
+                gdrive.get_folder_contents(folder_id=folder_id, headers=request_headers) for folder_id in query_id
+            ])
+            return format_directory_json_responses(directory_arr)
 
-@api.get(
-    path="/{algorithm}/public-key",
+@api.post(
+    path="/public-key",
     description="Get the public key for secure communication when transmitting the user's data on top of HTTPS",
-    summary="Available algorithm: RSA4096-OAEP-SHA512",
+    summary="Available algorithm: RSA4096-OAEP-SHA512, RSA4096-OAEP-SHA256",
     response_model=PublicKeyResponse,
     response_class=PrettyJSONResponse,
     include_in_schema=True
 )
-async def get_public_key(request: Request, algorithm: PublicKeyAlgorithm):
-    algorithm = algorithm.lower()
+async def get_public_key(request: Request, json_payload: PublicKeyRequest):
+    algorithm = json_payload.algorithm.lower()
 
     CLOUD_LOGGER.info(
         content=f"User {get_user_ip(request)}: Retrieved the public key (algorithm: {algorithm})]"
     )
 
     # if (algorithm == "rsa"):  # commented it out since only RSA is supported and the
-                                # path parameter will be validated via the PublicKeyAlgorithm class
-    return {"public_key": USER_COOKIE.get_api_rsa_public_key()}
+                                # path parameter will be validated via the PublicKeyRequest class
+    return {"public_key": USER_DATA.get_api_rsa_public_key(digest_method=json_payload.digest_method)}
 
 @api.post(
-    path="/encrypt-cookie", 
-    description="Encrypts the user's cookie with the server's symmetric key",
-    response_model=CookieJsonResponse,
+    path="/encrypt", 
+    description="Encrypts the user's data with the server's symmetric key",
+    response_model=UserDataJsonResponse,
     response_class=PrettyJSONResponse,
     include_in_schema=True
 )
-async def encrypt_cookie(request: Request, json_payload: CookieJsonPayload):
+async def encrypt_cookie(request: Request, json_payload: UserDataJsonRequest):
     CLOUD_LOGGER.info(
         content={
-            "message": f"User {get_user_ip(request)}: Encrypted the cookie",
-            "cookie": "REDACTED",
-            "public_key": json_payload.public_key
+            "message": f"User {get_user_ip(request)}: Encrypted their data.",
+            "data": "REDACTED",
+            "data_type": str(type(json_payload.data)),
+            "public_key": json_payload.public_key,
+            "digest_method": json_payload.digest_method,
         }
     )
 
-    cookie_payload = USER_COOKIE.decrypt_cookie_payload(json_payload.cookie)
-    if ("error" in cookie_payload):
-        raise APIBadRequest(error=cookie_payload)
+    data_payload = USER_DATA.decrypt_user_payload(
+        encrypted_data=json_payload.data, 
+        digest_method=json_payload.digest_method
+    )
+    if ("error" in data_payload):
+        raise APIException(error=data_payload)
 
     try:
-        encrypted_cookie_data = USER_COOKIE.encrypt_cookie_data(
-            cookie_data=cookie_payload["payload"],
+        encrypted_user_data = USER_DATA.encrypt_user_data(
+            user_data=data_payload["payload"],
             user_public_key=json_payload.public_key,
             digest_method=json_payload.digest_method
         )
     except (CRC32ChecksumError):
-        raise APIBadRequest(error="integrity checks failed.")
+        raise APIException(error="integrity checks failed.")
 
-    return {"cookie": encrypted_cookie_data}
+    return {"data": encrypted_user_data}
 
 @api.post(
-    path="/decrypt-cookie",
-    description="Decrypts the user's cookie with the server's symmetric key",
-    response_model=CookieJsonResponse,
+    path="/decrypt",
+    description="Decrypts the user's data with the server's symmetric key",
+    response_model=UserDataJsonResponse,
     response_class=PrettyJSONResponse,
     include_in_schema=True
 )
-async def decrypt_cookie(request: Request, json_payload: CookieJsonPayload):
+async def decrypt_cookie(request: Request, json_payload: UserDataJsonRequest):
     CLOUD_LOGGER.info(
         content={
-            "message": f"User {get_user_ip(request)}: Decrypted the cookie",
-            "cookie": "REDACTED",
-            "public_key": json_payload.public_key
+            "message": f"User {get_user_ip(request)}: Decrypted their data.",
+            "data": "REDACTED",
+            "data_type": str(type(json_payload.data)),
+            "public_key": json_payload.public_key,
+            "digest_method": json_payload.digest_method,
         }
     )
 
-    encrypted_cookie_payload = USER_COOKIE.decrypt_cookie_payload(json_payload.cookie)
-    if ("error" in encrypted_cookie_payload):
-        raise APIBadRequest(error=encrypted_cookie_payload)
+    encrypted_data_payload = USER_DATA.decrypt_user_payload(
+        encrypted_data=json_payload.data, 
+        digest_method=json_payload.digest_method
+    )
+    if ("error" in encrypted_data_payload):
+        raise APIException(error=encrypted_data_payload)
 
     try:
-        decryptedCookieData = USER_COOKIE.decrypt_cookie_data(
-            encrypted_cookie_data=encrypted_cookie_payload["payload"], 
+        decrypted_user_data = USER_DATA.decrypt_user_data(
+            encrypted_user_data=encrypted_data_payload["payload"], 
             user_public_key=json_payload.public_key,
             digest_method=json_payload.digest_method
         )
     except (TypeError):
-        raise APIBadRequest(error="encrypted cookie must be in bytes.")
+        raise APIException(error="encrypted cookie must be in bytes.")
     except (CRC32ChecksumError):
-        raise APIBadRequest(error="integrity checks failed, please try again.")
+        raise APIException(error="integrity checks failed, please try again.")
     except (DecryptionError):
-        raise APIBadRequest(error="decryption failed.")
+        raise APIException(error="decryption failed.")
 
-    return {"cookie": decryptedCookieData}
+    return {"data": decrypted_user_data}

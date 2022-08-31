@@ -1,13 +1,18 @@
 # import third-party libraries
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from starlette.types import ASGIApp
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # import Python's standard libraries
 import json
 import re
 from typing import Any
+
+# import local python libraries
+from .cloud_logger import CLOUD_LOGGER
 
 class PrettyJSONResponse(JSONResponse):
     """Returns the JSON response with proper indentations"""
@@ -20,15 +25,15 @@ class PrettyJSONResponse(JSONResponse):
             separators=(", ", ": "),
         ).encode("utf-8")
 
-class APIBadRequest(Exception):
-    """Class for the APIBadRequest exception class that will
+class APIException(Exception):
+    """Class for the APIException exception class that will
     return a JSON response with the error message when raised"""
     def __init__(self, error: str | dict, status_code: int | None = 400):
-        """Constructor for the APIBadRequest exception class
+        """Constructor for the APIException exception class
 
         Usage Example:
-        >>> raise APIBadRequest({"error": "invalid request"})
-        >>> raise APIBadRequest("invalid request") # the error message will be the same as above
+        >>> raise APIException({"error": "invalid request"})
+        >>> raise APIException("invalid request") # the error message will be the same as above
 
         Attributes:
             error (str | dict):
@@ -43,9 +48,35 @@ class APIBadRequest(Exception):
 
 def add_exception_handlers(app: ASGIApp):
     """Adds custom exception handlers to the API"""
-    @app.exception_handler(APIBadRequest)
-    async def api_bad_request_handler(request: Request, exc: APIBadRequest):
+    @app.exception_handler(APIException)
+    async def api_bad_request_handler(request: Request, exc: APIException):
         return PrettyJSONResponse(content=exc.error, status_code=exc.status_code)
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_error_handler(request: Request, exc: RequestValidationError):
+        errors = exc.errors()
+        CLOUD_LOGGER.error(
+            content={
+                "Request validation error": json.dumps(obj=errors, indent=4)
+            }
+        )
+        return PrettyJSONResponse(
+            content={"error": errors}, 
+            status_code=422
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
+        CLOUD_LOGGER.error(
+            content={
+                "Starlette HTTP Exception": json.dumps(obj=exc.detail)
+            }
+        )
+        status_code = exc.status_code
+        return PrettyJSONResponse(
+            content={"error_code": status_code, "message": exc.detail},
+            status_code=status_code
+        )
 
 class CacheControlURLRule:
     """Creates an object that contains the path and cache control headers for a route"""

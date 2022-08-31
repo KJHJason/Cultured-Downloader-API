@@ -1,5 +1,5 @@
 # import third-party libraries
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 
 # import Google Cloud Logging API (third-party library)
 from google.cloud import logging as gcp_logging
@@ -26,19 +26,21 @@ app = FastAPI(
 )
 
 # Add cache headers to the specified routes
-ONE_YEAR_CACHE = "public, max-age=31536000"
-ONE_DAY_CACHE = "public, max-age=86400"
-app.add_middleware(
-    CacheControlMiddleware, 
-    routes=(
-        CacheControlURLRule(path="/", cache_control=ONE_DAY_CACHE),
-        CacheControlURLRule(path="/favicon.ico", cache_control=ONE_YEAR_CACHE),
-        CacheControlURLRule(path=re.compile(r"^\/v1\/(rsa)\/public-key$"), cache_control=ONE_DAY_CACHE),
-        CacheControlURLRule(path=re.compile(r"^\/v\d+\/docs$"), cache_control=ONE_DAY_CACHE),
-        CacheControlURLRule(path=re.compile(r"^\/v\d+\/redoc$"), cache_control=ONE_DAY_CACHE),
-        CacheControlURLRule(path=re.compile(r"^\/v\d+\/openapi\.json$"), cache_control=ONE_DAY_CACHE)
+# when the app is not in debug mode
+if (not APP_CONSTANTS.DEBUG_MODE):
+    ONE_YEAR_CACHE = "public, max-age=31536000"
+    ONE_DAY_CACHE = "public, max-age=86400"
+    app.add_middleware(
+        CacheControlMiddleware, 
+        routes=(
+            CacheControlURLRule(path="/", cache_control=ONE_DAY_CACHE),
+            CacheControlURLRule(path="/favicon.ico", cache_control=ONE_YEAR_CACHE),
+            CacheControlURLRule(path=re.compile(r"^\/v1\/(rsa)\/public-key$"), cache_control=ONE_DAY_CACHE),
+            CacheControlURLRule(path=re.compile(r"^\/v\d+\/docs$"), cache_control=ONE_DAY_CACHE),
+            CacheControlURLRule(path=re.compile(r"^\/v\d+\/redoc$"), cache_control=ONE_DAY_CACHE),
+            CacheControlURLRule(path=re.compile(r"^\/v\d+\/openapi\.json$"), cache_control=ONE_DAY_CACHE)
+        )
     )
-)
 
 # Add custom exception handlers
 add_exception_handlers(app=app)
@@ -67,12 +69,5 @@ app.mount(
 """--------------------------- End of API Routes ---------------------------"""
 
 if (__name__ == "__main__"):
-    # from hypercorn.config import Config
-    # from hypercorn.asyncio import serve
-    # import asyncio
-
-    # config = Config()
-    # config.bind = ["127.0.0.1:8000"]
-    # asyncio.run(serve(app, config))
     from uvicorn import run
     run("app:app", host="127.0.0.1", port=8080, reload=True)

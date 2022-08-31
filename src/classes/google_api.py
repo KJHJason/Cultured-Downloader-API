@@ -1,8 +1,7 @@
 # import third-party libraries
 import httpx
 from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+from google.auth.transport.requests import Request
 
 # import Python's standard libraries
 import json
@@ -32,6 +31,12 @@ class GoogleOAuth2:
             scopes=C.GOOGLE_OAUTH_SCOPES
         )
 
+    def get_oauth_access_token(self) -> str:
+        """Sends a request to Google and retrieve a short-lived 30 mins to 1 hour token"""
+        request = Request()
+        self.CREDENTIALS.refresh(request)
+        return self.CREDENTIALS.token
+
     @property
     def CREDENTIALS(self) -> Credentials:
         """Returns the credentials object that can be used to build other 
@@ -39,21 +44,15 @@ class GoogleOAuth2:
         return self.__CREDENTIALS
 
 class GoogleDrive(GoogleOAuth2):
-    """Creates an authenticated Google Drive Client that 
-    can be used for communicating with Google Drive API v3."""
+    """Creates an authenticated Google Drive Client that can be used 
+    for communicating with Google Drive API v3 with async capabilities."""
     def __init__(self) -> None:
         super().__init__()
-        self.__DRIVE_SERVICE = build(
-            serviceName="drive",
-            version="v3",
-            credentials=self.CREDENTIALS
-        )
-
         # add some restrictions to prevent the user from reading my own gdrive files
         self.__QUERY = "(visibility='anyoneCanFind' or visibility='anyoneWithLink')"\
                        " and not ('kuanjunhaojason@gmail.com' in owners)"
 
-    def get_folder_contents(self, folder_id: str) -> list:
+    async def get_folder_contents(self, folder_id: str, headers: dict | None = None) -> list:
         """Sends a request to the Google Drive API to get the 
         json representation of the folder URL's directory structure
 
@@ -65,38 +64,48 @@ class GoogleDrive(GoogleOAuth2):
             dict:
                 The json representation of the gdrive URL's directory structure
         """
-        files = []
-        page_token = None
-        while (1):
-            try:
-                response = self.__DRIVE_SERVICE.files().list(
-                    q=" ".join((f"'{folder_id}' in parents and", self.__QUERY)),
-                    fields="nextPageToken, files(kind, id, name, mimeType)",
-                    pageToken=page_token
-                ).execute()
-            except (HttpError) as e:
-                CLOUD_LOGGER.warning(
-                    content={
-                        "message": f"error retrieving folder, {folder_id}",
-                        "error": str(e)
+        if (headers is None):
+            headers = AC.DRIVE_REQ_HEADERS.copy()
+            headers["Authorization"] = f"Bearer {self.get_oauth_access_token()}"
+
+        files, page_token = [], None
+        async with httpx.AsyncClient(headers=headers, http2=True) as client:
+            while (1):
+                query = " ".join((f"'{folder_id}' in parents and", self.__QUERY))
+                url = f"https://www.googleapis.com/drive/v3/files?q={query}&fields=nextPageToken,files(kind, id, name, mimeType)"
+                if (page_token is not None):
+                    url += f"&pageToken={page_token}"
+
+                try:
+                    response = await client.get(url=url)
+                except (
+                    httpx.RequestError,
+                    httpx.HTTPStatusError,
+                    httpx.HTTPError
+                ) as e:
+                    CLOUD_LOGGER.warning(
+                        content={
+                            "message": f"error retrieving content from folder, {folder_id}",
+                            "error": str(e)
+                        }
+                    )
+                    return {
+                        "error": 
+                            "could not retrieve file details from Google Drive API... "
+                            "please try again later."
                     }
-                )
-                return {
-                    "error": 
-                        "could not retrieve folder contents from Google Drive API... "
-                        "please try again later."
-                }
 
-            for file in response.get("files", []):
-                files.append(file)
+                response = response.json()
+                for file in response.get("files", []):
+                    files.append(file)
 
-            page_token = response.get("nextPageToken", None)
-            if (page_token is None):
-                break
+                page_token = response.get("nextPageToken", None)
+                if (page_token is None):
+                    break
 
-        return {"directory": files}
+        return {"folder_id": folder_id, "directory": files}
 
-    async def get_file_details(self, file_id: str) -> dict:
+    async def get_file_details(self, file_id: str, headers: dict | None = None) -> dict:
         """Sends a request to the Google Drive API to
         get the json representation of the file details.
 
@@ -111,17 +120,18 @@ class GoogleDrive(GoogleOAuth2):
             dict:
                 The json representation of the file's details
         """
-        gdrive_api_token = SECRET_MANAGER.get_secret_payload(secret_id="gdrive-api-token")
-        async with httpx.AsyncClient(headers=AC.DRIVE_REQ_HEADERS, http2=True) as client:
+        if (headers is None):
+            headers = AC.DRIVE_REQ_HEADERS.copy()
+            headers["Authorization"] = f"Bearer {self.get_oauth_access_token()}"
+
+        async with httpx.AsyncClient(headers=headers, http2=True) as client:
             try:
-                url = f"https://www.googleapis.com/drive/v3/files/{file_id}?key={gdrive_api_token}"
-                json_response = await client.get(url=url)
-                return {"file": json_response.json()}
+                url = f"https://www.googleapis.com/drive/v3/files/{file_id}?fields=kind, id, name, mimeType, owners, permissions"
+                response = await client.get(url=url)
             except (
                 httpx.RequestError,
                 httpx.HTTPStatusError,
-                httpx.HTTPError,
-                httpx.StreamError
+                httpx.HTTPError
             ) as e:
                 CLOUD_LOGGER.warning(
                     content={
@@ -133,4 +143,6 @@ class GoogleDrive(GoogleOAuth2):
                     "error": 
                         "could not retrieve file details from Google Drive API... "
                         "please try again later."
-                    }
+                }
+
+        return {"file_id": file_id, "response": response.json()}

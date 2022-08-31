@@ -3,32 +3,34 @@ from fastapi import APIRouter
 from fastapi.responses import FileResponse, RedirectResponse
 
 # import local python libraries
-from classes.v1 import Index, Teapot
 from classes import CONSTANTS, APP_CONSTANTS, PrettyJSONResponse
 
 general = APIRouter()
 
 @general.get(
-    path="/", 
-    response_model=Index, 
+    path="/",
     response_class=PrettyJSONResponse,
     include_in_schema=False
 )
 async def index():
     return {
         "message": "Welcome to Cultured Downloader API!",
-        "latest_version": APP_CONSTANTS.LATEST_VER
+        "latest_version": APP_CONSTANTS.LATEST_VER,
+        "main_website": "https://cultureddownloader.com/",
+        "bug_reports": "https://github.com/KJHJason/Cultured-Downloader/issues"
     }
 
 @general.get(
-    path="/418", 
-    response_model=Teapot, 
+    path="/418",
     response_class=PrettyJSONResponse, 
     status_code=418,
     include_in_schema=False
 )
 async def teapot():
-    return {"message": "I'm a teapot"}
+    return {
+        "code": 418, 
+        "message": "I'm a teapot"
+    }
 
 @general.get(
     path=APP_CONSTANTS.FAVICON_URL,
