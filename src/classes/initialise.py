@@ -27,7 +27,7 @@ class Constants:
     # For the web application
     ROOT_DIR_PATH: pathlib.Path = pathlib.Path(__file__).parent.parent.absolute()
     CONFIG_DIR_PATH: pathlib.Path = ROOT_DIR_PATH.joinpath("config_files")
-    ICON_PATH: pathlib.Path = ROOT_DIR_PATH.joinpath("static", "favicon.ico")
+    ICON_PATH: pathlib.Path = ROOT_DIR_PATH.joinpath("static", "images", "icons", "favicon.ico")
 
     # For GCP-related constants
     GOOGLE_PROJECT_NAME: str = "cultureddownloader"

@@ -25,6 +25,19 @@ api = FastAPI(
 )
 
 @api.get(
+    path="/api",
+    response_class=PrettyJSONResponse,
+    include_in_schema=False
+)
+async def index():
+    return {
+        "message": "Welcome to Cultured Downloader API!",
+        "latest_version": APP_CONSTANTS.LATEST_VER,
+        "main_website": "https://cultureddownloader.com/",
+        "bug_reports": "https://github.com/KJHJason/Cultured-Downloader/issues"
+    }
+
+@api.get(
     path=APP_CONSTANTS.DOCS_URL,
     response_class=HTMLResponse,
     include_in_schema=False

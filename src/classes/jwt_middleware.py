@@ -6,7 +6,6 @@ from starlette.datastructures import MutableHeaders
 from starlette.requests import HTTPConnection
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-
 # import Python's standard libraries
 import time
 from typing import Any

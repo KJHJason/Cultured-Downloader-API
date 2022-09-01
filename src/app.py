@@ -1,5 +1,7 @@
 # import third-party libraries
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from starlette.routing import Mount
 
 # import Google Cloud Logging API (third-party library)
 from google.cloud import logging as gcp_logging
@@ -8,19 +10,36 @@ from google.cloud import logging as gcp_logging
 import logging
 
 # import local python libraries
-from classes import APP_CONSTANTS, CLOUD_LOGGER, add_exception_handlers, add_middleware_to_app
-from routers import api_v1, general
+from classes import CONSTANTS, APP_CONSTANTS, CLOUD_LOGGER, add_exception_handlers, add_middleware_to_app
+from routers import api_v1, web_app_general
 
 """--------------------------- Start of API Configuration ---------------------------"""
 
+routes = [
+    Mount(
+        path="/static", 
+        app=StaticFiles(
+            directory=str(CONSTANTS.ROOT_DIR_PATH.joinpath("static"))
+        ), 
+        name="static"
+    ),
+    # For adding several APIs on top of the main API...
+    # https://fastapi.tiangolo.com/advanced/sub-applications/
+    # https://github.com/tiangolo/fastapi/issues/2806
+    Mount(
+        path="/v1", 
+        app=api_v1,
+        name="api_v1"
+    )
+]
 app = FastAPI(
     debug=APP_CONSTANTS.DEBUG_MODE,
     version=APP_CONSTANTS.LATEST_VER,
+    routes=routes,
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
-    swagger_ui_oauth2_redirect_url=None,
-    responses=APP_CONSTANTS.API_RESPONSES
+    swagger_ui_oauth2_redirect_url=None
 )
 
 # add custom middleware to app and the API
@@ -37,22 +56,21 @@ logging.getLogger().setLevel(logging.INFO)
 
 """--------------------------- End of API Configuration ---------------------------"""
 
-"""--------------------------- Start of API Routes ---------------------------"""
+"""--------------------------- Start of App Routes ---------------------------"""
 
 # For mounting the routes to the main API
 # similar to Flask's Blueprint module
-app.include_router(general)
+app.include_router(web_app_general)
 
-# For adding several APIs on top of the main API...
-# https://fastapi.tiangolo.com/advanced/sub-applications/
-# https://github.com/tiangolo/fastapi/issues/2806
-app.mount(
-    path="/v1", 
-    app=api_v1
-)
-
-"""--------------------------- End of API Routes ---------------------------"""
+"""--------------------------- End of App Routes ---------------------------"""
 
 if (__name__ == "__main__"):
     from uvicorn import run
-    run("app:app", host="127.0.0.1", port=8080, reload=True)
+    run(
+        "app:app", 
+        host="127.0.0.1", 
+        port=8080,
+        reload=True, 
+        debug=APP_CONSTANTS.DEBUG_MODE,
+        log_level="info"
+    )

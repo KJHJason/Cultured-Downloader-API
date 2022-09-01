@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 class AppConstants:
     """This dataclass is used to store all the constants used in the application."""
     # API constants
-    DEBUG_MODE: bool = False # TODO: Change this to False when deploying to production
+    DEBUG_MODE: bool = True # TODO: Change this to False when deploying to production
     FAVICON_URL: str = "/favicon.ico"
     API_RESPONSES: dict = field(
         default_factory=lambda: {
@@ -49,9 +49,23 @@ class AppConstants:
     # For caching
     BLUEPRINT_ENDPOINT_REGEX: re.Pattern[str] = re.compile(r"^[\w]+(.)[\w]+$")
 
-    # For limiter configurations
-    DEFAULT_REQUEST_LIMIT: str = "15 per second"
-    API_REQUEST_LIMIT: str = "10 per second"
+    # For the CSP header
+    NONCE_REGEX = re.compile(r"'nonce-(.*)'")
+    CSP_HEADER: dict[str, list] = field(
+        default_factory=lambda: {
+            "style-src": [
+                "'self'",
+                "https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css"
+            ],
+            "frame-src":[
+                "'self'"
+            ],
+            "script-src":[
+                "'self'",
+                "https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.bundle.min.js"
+            ]
+        }
+    )
 
 APP_CONSTANTS = AppConstants()
 

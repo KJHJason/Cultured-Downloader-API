@@ -1,30 +1,38 @@
 # import third-party libraries
-from fastapi import APIRouter
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import APIRouter, Request, Response
+from fastapi.responses import FileResponse, RedirectResponse, HTMLResponse
 
 # import local python libraries
+from functions import format_server_time, get_jinja2_templates, add_csp_header_to_response
 from classes import CONSTANTS, APP_CONSTANTS, PrettyJSONResponse
 
-general = APIRouter()
-
-@general.get(
-    path="/",
-    response_class=PrettyJSONResponse,
+web_app_general = APIRouter(
     include_in_schema=False
 )
-async def index():
-    return {
-        "message": "Welcome to Cultured Downloader API!",
-        "latest_version": APP_CONSTANTS.LATEST_VER,
-        "main_website": "https://cultureddownloader.com/",
-        "bug_reports": "https://github.com/KJHJason/Cultured-Downloader/issues"
-    }
+templates = get_jinja2_templates()
 
-@general.get(
+@web_app_general.get(
+    path="/",
+    response_class=HTMLResponse
+)
+async def index(request: Request, response: Response):
+    server_time = {"server_time": format_server_time()}
+    add_csp_header_to_response(response)
+    return templates.TemplateResponse(
+        name="general/home.html", 
+        context={"request": request, "response": response, "context": server_time},
+        headers=response.headers
+    )
+
+@web_app_general.get("/favicon.ico")
+async def favicon():
+    """Return the favicon of the web app."""
+    return await FileResponse(CONSTANTS.ICON_PATH)
+
+@web_app_general.get(
     path="/418",
     response_class=PrettyJSONResponse, 
-    status_code=418,
-    include_in_schema=False
+    status_code=418
 )
 async def teapot():
     return {
@@ -32,39 +40,23 @@ async def teapot():
         "message": "I'm a teapot"
     }
 
-@general.get(
-    path=APP_CONSTANTS.FAVICON_URL,
-    responses={
-        200: {
-            "content": {"image/x-icon": {}},
-        }
-    },
-    response_class=FileResponse,
-    include_in_schema=False
-)
-async def favicon():
-    return FileResponse(CONSTANTS.ICON_PATH)
-
-@general.get(
+@web_app_general.get(
     path="/latest/docs",
-    response_class=RedirectResponse,
-    include_in_schema=False
+    response_class=RedirectResponse
 )
 async def latest_docs():
     return RedirectResponse(url=f"/{APP_CONSTANTS.LATEST_VER}{APP_CONSTANTS.DOCS_URL}")
 
-@general.get(
+@web_app_general.get(
     path="/latest/redoc",
-    response_class=RedirectResponse,
-    include_in_schema=False
+    response_class=RedirectResponse
 )
 async def latest_redocs():
     return RedirectResponse(url=f"/{APP_CONSTANTS.LATEST_VER}{APP_CONSTANTS.REDOC_URL}")
 
-@general.get(
+@web_app_general.get(
     path="/latest/openapi.json",
-    response_class=RedirectResponse,
-    include_in_schema=False
+    response_class=RedirectResponse
 )
 async def latest_openapi_json():
     return RedirectResponse(url=f"/{APP_CONSTANTS.LATEST_VER}{APP_CONSTANTS.OPENAPI_JSON_URL}")
