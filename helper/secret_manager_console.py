@@ -17,10 +17,10 @@ from importlib.util import spec_from_file_location, module_from_spec
 FILE_PATH = pathlib.Path(__file__).parent.absolute()
 PYTHON_FILES_PATH = FILE_PATH.parent.joinpath("src", "classes")
 
-# add to sys path so that cloud_logger.py can be imported by secret_manager.py
+# add to sys path so that other files can be imported by cloud_kms.py
 sys.path.append(str(PYTHON_FILES_PATH))
 
-# import secret_manager.py local python module using absolute path
+# import cloud_kms.py local python module using absolute path
 KMS_PY_FILE = PYTHON_FILES_PATH.joinpath("cloud_kms.py")
 spec = spec_from_file_location("cloud_kms", str(KMS_PY_FILE))
 cloud_kms = module_from_spec(spec)
@@ -39,18 +39,18 @@ def shutdown() -> NoReturn:
     print()
     sys.exit(0)
 
-def get_input(prompt: str, availableInputs: tuple[str] | list[str], 
-              default: str | None = None, extraInfo: str | None = None) -> str:
+def get_input(prompt: str, available_inputs: tuple[str] | list[str], 
+              default: str | None = None, extra_info: str | None = None) -> str:
     """Gets input from user.
 
     Args:
         prompt (str):
             The prompt to display to the user.
-        availableInputs (tuple[str]|list[str]):
+        available_inputs (tuple[str]|list[str]):
             The available inputs that the user can enter.
         default (str|None):
             The default input to return if the user enters nothing.
-        extraInfo (str|None):
+        extra_info (str|None):
             Extra information to display to the user before the prompt.
 
     Returns:
@@ -59,22 +59,22 @@ def get_input(prompt: str, availableInputs: tuple[str] | list[str],
 
     Raises:
         TypeError:
-            If the supplied availableInputs argument is not a tuple or a list.
+            If the supplied available_inputs argument is not a tuple or a list.
     """
-    if (not isinstance(availableInputs, tuple | list)):
-        raise TypeError("availableInputs must be a tuple or list")
+    if (not isinstance(available_inputs, tuple | list)):
+        raise TypeError("available_inputs must be a tuple or list")
 
-    if (isinstance(availableInputs, list)):
-        availableInputs = tuple(availableInputs)
+    if (isinstance(available_inputs, list)):
+        available_inputs = tuple(available_inputs)
 
     while (1):
-        if (extraInfo is not None):
-            print(extraInfo)
+        if (extra_info is not None):
+            print(extra_info)
 
         response = input(prompt).lower().strip()
         if (response == "" and default is not None):
             return default
-        elif (response not in availableInputs):
+        elif (response not in available_inputs):
             print("Invalid input. Please try again.", end="\n\n")
             continue
         else:
@@ -89,7 +89,7 @@ def generate_new_oauth_token() -> None:
     try:
         choice = get_input(
             prompt="Do you want to save a new Google OAuth2 token? (y/N): ",
-            availableInputs=("y", "n"),
+            available_inputs=("y", "n"),
             default="n"
         )
     except (KeyboardInterrupt):
@@ -101,13 +101,13 @@ def generate_new_oauth_token() -> None:
     else:
         print(f"Will proceed to generate a new Google OAuth2 token, if it is invalid...")
 
-    generatedNewToken = False
+    generated_token = False
     creds = None
 
     try:
         GOOGLE_TOKEN = json.loads(
             SECRET_MANAGER.get_secret_payload(
-                secretID=C.OAUTH_TOKEN_SECRET_NAME
+                secret_id=C.OAUTH_TOKEN_SECRET_NAME
             )
         )
     except (json.decoder.JSONDecodeError, TypeError):
@@ -115,7 +115,7 @@ def generate_new_oauth_token() -> None:
 
     GOOGLE_OAUTH_CLIENT = json.loads(
         SECRET_MANAGER.get_secret_payload(
-            secretID=C.OAUTH_CLIENT_SECRET_NAME
+            secret_id=C.OAUTH_CLIENT_SECRET_NAME
         )
     )
 
@@ -144,26 +144,26 @@ def generate_new_oauth_token() -> None:
 
         # For print message to indicate if the token is 
         # newly uploaded or loaded from GCP Secret Manager API
-        generatedNewToken = True
+        generated_token = True
 
         try:
-            destroyAllPastVer = get_input(
+            destroy_all_past_ver = get_input(
                 prompt="Do you want to DESTROY all past versions? (Y/n): ",
-                availableInputs=("y", "n"),
+                available_inputs=("y", "n"),
                 default="Y"
             )
         except (KeyboardInterrupt):
             print("\nCancelling Google OAuth2 token creation...")
             return
 
-        destroyAllPastVer = True if (destroyAllPastVer != "n") else False
+        destroy_all_past_ver = True if (destroy_all_past_ver != "n") else False
 
         # Save the credentials for the next run to Google Secret Manager API
         print(f"Adding new secret version to the secret ID, {C.OAUTH_TOKEN_SECRET_NAME}...", end="")
         response = SECRET_MANAGER.upload_new_secret_version(
-            secretID=C.OAUTH_TOKEN_SECRET_NAME,
+            secret_id=C.OAUTH_TOKEN_SECRET_NAME,
             secret=creds.to_json(),
-            destroyPastVer=destroyAllPastVer,
+            destroy_past_ver=destroy_all_past_ver,
             destroy_optimise=True
         )
         print(f"\rNew secret version, {C.OAUTH_TOKEN_SECRET_NAME}, created:", response.name)
@@ -171,29 +171,26 @@ def generate_new_oauth_token() -> None:
     try:
         # Build the Google Drive service from the credentials
         with build("drive", "v3", credentials=creds) as _:
-            print(f"Status OK! {'Generated' if (generatedNewToken) else 'Loaded'} token.json is valid.")
+            print(f"Status OK! {'Generated' if (generated_token) else 'Loaded'} token.json is valid.")
     except (HttpError) as error:
         print(f"\nAn error has occurred:\n{error}")
         print()
         sys.exit(1)
 
 def flask_session() -> None:
-    FLASK_SECRET_KEY_ID = "flask-secret-key" 
-    FLASK_SESSION_SALT_ID = "flask-session-salt"
+    API_HMAC_SHA512_KEY = "api-hmac-secret-key"
     while (1):
         print("""
---------- Flask Session Configurations Menu ---------
-1. Generate a new secret key using GCP KMS API
-2. Generate a new 64 bytes salt
-3. View the secret key from GCP Secret Manager API
-4. View the salt from GCP Secret Manager API
+------------ API JWT Configurations Menu ------------
+1. Generate a new API's HMAC secret key (Cloud HSM)
+2. View the secret key from GCP Secret Manager API
 X. Back to main menu
 -----------------------------------------------------""")
 
         try:
             choice = get_input(
                 prompt="Please enter your choice: ",
-                availableInputs=("1", "2", "3", "4", "x")
+                available_inputs=("1", "2", "x")
             )
         except (KeyboardInterrupt):
             return
@@ -202,124 +199,82 @@ X. Back to main menu
             return
         elif (choice == "1"):
             try:
-                generatePrompt = get_input(
+                generate_prompt = get_input(
                     prompt="Do you want to generate a new secret key? (y/N): ",
-                    availableInputs=("y", "n"),
+                    available_inputs=("y", "n"),
                     default="n"
                 )
             except (KeyboardInterrupt):
                 print("Generation of a new key will be aborted...")
                 continue
 
-            if (generatePrompt != "y"):
+            if (generate_prompt != "y"):
                 print("\nCancelling key generation...", end="\n\n")
                 continue
 
             try:
-                destroyAllPastVer = get_input(
+                destroy_all_past_ver = get_input(
                     prompt="Do you want to DESTROY all past versions? (Y/n): ",
-                    availableInputs=("y", "n"),
+                    available_inputs=("y", "n"),
                     default="Y"
                 )
             except (KeyboardInterrupt):
                 print("Generation of a new key will be aborted...")
                 continue
-            destroyAllPastVer = True if (destroyAllPastVer != "n") else False
+            destroy_all_past_ver = True if (destroy_all_past_ver != "n") else False
 
-            print("Generating a new Flask secret key...", end="")
+            print("Generating a new API's HMAC secret key...", end="")
             response = SECRET_MANAGER.upload_new_secret_version(
-                secretID=FLASK_SECRET_KEY_ID,
+                secret_id=API_HMAC_SHA512_KEY,
                 secret=GCP_KMS.get_random_bytes(
-                    nBytes=512, 
-                    generateFromHSM=True
+                    n_bytes=512, 
+                    generate_from_hsm=True
                 ),
-                destroyPastVer=destroyAllPastVer,
+                destroy_past_ver=destroy_all_past_ver,
                 destroy_optimise=True
             )
-            print(f"\rGenerated the new Flask secret key at \"{response.name}\"!", end="\n\n")
+            print(f"\rGenerated the new API's HMAC secret key at \"{response.name}\"!", end="\n\n")
 
         elif (choice == "2"):
             try:
-                generateSalt = get_input(
-                    prompt="Enter command (y/N): ",
-                    availableInputs=("y", "n"),
-                    default="n",
-                    extraInfo="Generate and add a new salt for the "
-                              "Flask session cookie to Google Secret Manager API?"
-                )
-            except (KeyboardInterrupt):
-                print("Generation of a new salt will be aborted...")
-                continue
-
-            if (generateSalt != "y"):
-                print("\nCancelling salt generation...", end="\n\n")
-                continue
-
-            try:
-                destroyAllPastVer = get_input(
-                    prompt="Do you want to DESTROY all past versions? (Y/n): ",
-                    availableInputs=("y", "n"),
-                    default="Y"
-                )
-            except (KeyboardInterrupt):
-                print("Generation of a new salt will be aborted...")
-                continue
-            destroyAllPastVer = True if (destroyAllPastVer != "n") else False
-
-            SECRET_MANAGER.upload_new_secret_version(
-                secretID=FLASK_SESSION_SALT_ID,
-                secret=GCP_KMS.get_random_bytes(
-                    nBytes=64, 
-                    generateFromHSM=True
-                ),
-                destroyPastVer=destroyAllPastVer,
-                destroy_optimise=True
-            )
-            print("Generated a new Flask session salt!")
-
-        elif (choice == "3" or choice == "4"):
-            secretType = "Flask secret key" if (choice == "3") \
-                                            else "Flask session salt"
-            try:
-                viewInHex = get_input(
-                    prompt=f"Do you want to view the {secretType} in hexadecimal? (Y/n): ",
-                    availableInputs=("y", "n"),
+                view_in_hex = get_input(
+                    prompt=f"Do you want to view the API's HMAC secret key in hexadecimal? (Y/n): ",
+                    available_inputs=("y", "n"),
                     default="y"
                 )
             except (KeyboardInterrupt):
-                print(f"Viewing of the {secretType} will be aborted...")
+                print(f"Viewing of the API's HMAC secret key will be aborted...")
                 continue
 
-            secretPayload = SECRET_MANAGER.get_secret_payload(
-                secretID=FLASK_SECRET_KEY_ID if (choice == "3") \
-                                             else FLASK_SESSION_SALT_ID,
-                decodeSecret=False
+            secret_payload = SECRET_MANAGER.get_secret_payload(
+                secret_id=API_HMAC_SHA512_KEY,
+                decode_secret=False
             )
-            if (viewInHex != "n"):
-                secretPayload = secretPayload.hex()
-            print(f"Generated {secretType} that is currently in use:", secretPayload, sep="\n")
-            del secretPayload
+            if (view_in_hex != "n"):
+                secret_payload = secret_payload.hex()
+            print(f"API's HMAC secret key that is currently in use:", secret_payload, sep="\n")
+            del secret_payload
 
 def main() -> None:
     while (1):
         print("""
 ---- Cultured Downloader Web App Menu ----
 1. Generate a new Google OAuth2 token
-2. Flask Session Configurations menu
+2. API JWT Configurations menu
 X. Shutdown program
 ------------------------------------------""")
         try:
-            menuChoice = get_input(
+            menu_choice = get_input(
                 prompt="Enter command: ",
-                availableInputs=("1", "2", "x")
+                available_inputs=("1", "2", "x")
             )
         except (KeyboardInterrupt):
             shutdown()
-        if (menuChoice == "x"):
+        if (menu_choice == "x"):
             shutdown()
-        elif (menuChoice == "1"):
+        elif (menu_choice == "1"):
             generate_new_oauth_token()
-        elif (menuChoice == "2"):
+        elif (menu_choice == "2"):
             flask_session()
 
 if (__name__ == "__main__"):

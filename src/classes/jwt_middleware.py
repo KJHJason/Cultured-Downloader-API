@@ -172,7 +172,7 @@ class JWT_HMAC:
         return claims
 
 API_HMAC = JWT_HMAC(
-    secret_key_id="flask-secret-key",
+    secret_key_id="api-hmac-secret-key",
     digest_method="sha512",
     claim_options={
         "iss": {
