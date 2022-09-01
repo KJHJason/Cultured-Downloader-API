@@ -13,6 +13,8 @@ from typing import Any
 
 # import local python libraries
 from .cloud_logger import CLOUD_LOGGER
+from .app_constants import APP_CONSTANTS as AC
+from .jwt_middleware import AuthlibJWTMiddleware, API_HMAC
 
 class PrettyJSONResponse(JSONResponse):
     """Returns the JSON response with proper indentations"""
@@ -45,38 +47,6 @@ class APIException(Exception):
         self.error = error if (isinstance(error, dict)) \
                            else {"error": error}
         self.status_code = status_code
-
-def add_exception_handlers(app: ASGIApp):
-    """Adds custom exception handlers to the API"""
-    @app.exception_handler(APIException)
-    async def api_bad_request_handler(request: Request, exc: APIException):
-        return PrettyJSONResponse(content=exc.error, status_code=exc.status_code)
-
-    @app.exception_handler(RequestValidationError)
-    async def request_validation_error_handler(request: Request, exc: RequestValidationError):
-        errors = exc.errors()
-        CLOUD_LOGGER.error(
-            content={
-                "Request validation error": json.dumps(obj=errors, indent=4)
-            }
-        )
-        return PrettyJSONResponse(
-            content={"error": errors}, 
-            status_code=422
-        )
-
-    @app.exception_handler(StarletteHTTPException)
-    async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
-        CLOUD_LOGGER.error(
-            content={
-                "Starlette HTTP Exception": json.dumps(obj=exc.detail)
-            }
-        )
-        status_code = exc.status_code
-        return PrettyJSONResponse(
-            content={"error_code": status_code, "message": exc.detail},
-            status_code=status_code
-        )
 
 class CacheControlURLRule:
     """Creates an object that contains the path and cache control headers for a route"""
@@ -137,3 +107,62 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
         else:
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         return response
+
+def add_middleware_to_app(app: ASGIApp):
+    """Adds custom middleware to the API"""
+    # add session capability to the API similar to
+    # flask session, request.session["key"] = "value"
+    app.add_middleware(
+        AuthlibJWTMiddleware, 
+        jwt_obj=API_HMAC,
+        https_only=AC.DEBUG_MODE
+    )
+
+    # Add cache headers to the specified routes
+    # when the app is not in debug mode
+    if (not AC.DEBUG_MODE):
+        ONE_YEAR_CACHE = "public, max-age=31536000"
+        ONE_DAY_CACHE = "public, max-age=86400"
+        app.add_middleware(
+            CacheControlMiddleware, 
+            routes=(
+                CacheControlURLRule(path="/", cache_control=ONE_DAY_CACHE),
+                CacheControlURLRule(path="/favicon.ico", cache_control=ONE_YEAR_CACHE),
+                CacheControlURLRule(path=re.compile(r"^\/v1\/(rsa)\/public-key$"), cache_control=ONE_DAY_CACHE),
+                CacheControlURLRule(path=re.compile(r"^\/v\d+\/docs$"), cache_control=ONE_DAY_CACHE),
+                CacheControlURLRule(path=re.compile(r"^\/v\d+\/redoc$"), cache_control=ONE_DAY_CACHE),
+                CacheControlURLRule(path=re.compile(r"^\/v\d+\/openapi\.json$"), cache_control=ONE_DAY_CACHE)
+            )
+        )
+
+def add_exception_handlers(app: ASGIApp):
+    """Adds custom exception handlers to the API"""
+    @app.exception_handler(APIException)
+    async def api_bad_request_handler(request: Request, exc: APIException):
+        return PrettyJSONResponse(content=exc.error, status_code=exc.status_code)
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_error_handler(request: Request, exc: RequestValidationError):
+        errors = exc.errors()
+        CLOUD_LOGGER.error(
+            content={
+                "Request validation error": json.dumps(obj=errors, indent=4)
+            }
+        )
+        return PrettyJSONResponse(
+            content={"error": errors}, 
+            status_code=422
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
+        CLOUD_LOGGER.error(
+            content={
+                "Starlette HTTP Exception": json.dumps(obj=exc.detail)
+            }
+        )
+        status_code = exc.status_code
+        return PrettyJSONResponse(
+            content={"error_code": status_code, "message": exc.detail},
+            status_code=status_code
+        )

@@ -26,6 +26,9 @@ class AppConstants:
     OPENAPI_JSON_URL: str = "/openapi.json"
     VER_ONE_OPENAPI_JSON_URL: str = f"/{VER_ONE}{OPENAPI_JSON_URL}"
 
+    # For the API's session middleware
+    ISSUER: str = "https://api.cultureddownloader.com/"
+
     # For encrypting/decrypting the saved user's cookie data
     RSA_SHA256_KEY_ID: str = "user-data-rsa-key-1"
     RSA_SHA512_KEY_ID: str = "user-data-rsa-key-2"

@@ -5,12 +5,10 @@ from fastapi import FastAPI
 from google.cloud import logging as gcp_logging
 
 # import Python's standard libraries
-import re
 import logging
 
 # import local python libraries
-from classes import APP_CONSTANTS, CLOUD_LOGGER, \
-                    CacheControlMiddleware, CacheControlURLRule, add_exception_handlers
+from classes import APP_CONSTANTS, CLOUD_LOGGER, add_exception_handlers, add_middleware_to_app
 from routers import api_v1, general
 
 """--------------------------- Start of API Configuration ---------------------------"""
@@ -25,22 +23,9 @@ app = FastAPI(
     responses=APP_CONSTANTS.API_RESPONSES
 )
 
-# Add cache headers to the specified routes
-# when the app is not in debug mode
-if (not APP_CONSTANTS.DEBUG_MODE):
-    ONE_YEAR_CACHE = "public, max-age=31536000"
-    ONE_DAY_CACHE = "public, max-age=86400"
-    app.add_middleware(
-        CacheControlMiddleware, 
-        routes=(
-            CacheControlURLRule(path="/", cache_control=ONE_DAY_CACHE),
-            CacheControlURLRule(path="/favicon.ico", cache_control=ONE_YEAR_CACHE),
-            CacheControlURLRule(path=re.compile(r"^\/v1\/(rsa)\/public-key$"), cache_control=ONE_DAY_CACHE),
-            CacheControlURLRule(path=re.compile(r"^\/v\d+\/docs$"), cache_control=ONE_DAY_CACHE),
-            CacheControlURLRule(path=re.compile(r"^\/v\d+\/redoc$"), cache_control=ONE_DAY_CACHE),
-            CacheControlURLRule(path=re.compile(r"^\/v\d+\/openapi\.json$"), cache_control=ONE_DAY_CACHE)
-        )
-    )
+# add custom middleware to app and the API
+add_middleware_to_app(app)
+add_middleware_to_app(api_v1)
 
 # Add custom exception handlers
 add_exception_handlers(app=app)
