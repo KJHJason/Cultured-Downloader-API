@@ -10,7 +10,8 @@ from google.cloud import logging as gcp_logging
 import logging
 
 # import local python libraries
-from classes import CONSTANTS, APP_CONSTANTS, CLOUD_LOGGER, add_exception_handlers, add_middleware_to_app
+from classes import CONSTANTS, APP_CONSTANTS, CLOUD_LOGGER
+from classes.middleware import add_middleware_to_app, add_app_exception_handlers, add_api_exception_handlers
 from routers import api_v1, web_app_general
 
 """--------------------------- Start of API Configuration ---------------------------"""
@@ -21,13 +22,13 @@ routes = [
         app=StaticFiles(
             directory=str(CONSTANTS.ROOT_DIR_PATH.joinpath("static"))
         ), 
-        name="static"
+        name="static_files"
     ),
     # For adding several APIs on top of the main API...
     # https://fastapi.tiangolo.com/advanced/sub-applications/
     # https://github.com/tiangolo/fastapi/issues/2806
     Mount(
-        path="/v1", 
+        path="/api/v1", 
         app=api_v1,
         name="api_v1"
     )
@@ -47,8 +48,8 @@ add_middleware_to_app(app)
 add_middleware_to_app(api_v1)
 
 # Add custom exception handlers
-add_exception_handlers(app=app)
-add_exception_handlers(app=api_v1)
+add_app_exception_handlers(app=app)
+add_api_exception_handlers(api=api_v1)
 
 # Integrate Google CLoud Logging to the API
 gcp_logging.handlers.setup_logging(CLOUD_LOGGER.GOOGLE_LOGGING_HANDLER)

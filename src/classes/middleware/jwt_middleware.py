@@ -12,15 +12,19 @@ from typing import Any
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from classes.app_constants import APP_CONSTANTS
-
 # import local python libraries
 if (__package__ is None or __package__ == ""):
+    import sys
+    import pathlib
+    sys.path.append(str(pathlib.Path(__file__).parent.parent))
+
     from secret_manager import SECRET_MANAGER
     from cloud_logger import CLOUD_LOGGER
+    from app_constants import APP_CONSTANTS
 else:
-    from .secret_manager import SECRET_MANAGER
-    from .cloud_logger import CLOUD_LOGGER
+    from classes.secret_manager import SECRET_MANAGER
+    from classes.cloud_logger import CLOUD_LOGGER
+    from classes.app_constants import APP_CONSTANTS
 
 class JWT_HMAC:
     """Mainly for the API's JWT middleware that is capable of session cookies 

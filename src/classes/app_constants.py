@@ -24,7 +24,7 @@ class AppConstants:
     DOCS_URL: str = "/docs"
     REDOC_URL: str = "/redoc"
     OPENAPI_JSON_URL: str = "/openapi.json"
-    VER_ONE_OPENAPI_JSON_URL: str = f"/{VER_ONE}{OPENAPI_JSON_URL}"
+    VER_ONE_OPENAPI_JSON_URL: str = f"/api/{VER_ONE}{OPENAPI_JSON_URL}"
 
     # For the API's session middleware
     ISSUER: str = "https://api.cultureddownloader.com/"
@@ -48,24 +48,6 @@ class AppConstants:
 
     # For caching
     BLUEPRINT_ENDPOINT_REGEX: re.Pattern[str] = re.compile(r"^[\w]+(.)[\w]+$")
-
-    # For the CSP header
-    NONCE_REGEX = re.compile(r"'nonce-(.*)'")
-    CSP_HEADER: dict[str, list] = field(
-        default_factory=lambda: {
-            "style-src": [
-                "'self'",
-                "https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css"
-            ],
-            "frame-src":[
-                "'self'"
-            ],
-            "script-src":[
-                "'self'",
-                "https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.bundle.min.js"
-            ]
-        }
-    )
 
 APP_CONSTANTS = AppConstants()
 

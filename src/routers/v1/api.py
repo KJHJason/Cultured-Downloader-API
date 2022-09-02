@@ -1,14 +1,18 @@
 # import third-party libraries
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
 # import local python libraries
 from functions import get_user_ip
-from functions.v1 import format_gdrive_json_response, format_file_json_responses, format_directory_json_response, format_directory_json_responses
-from classes import USER_DATA, GoogleDrive, APIException, PrettyJSONResponse, APP_CONSTANTS, CLOUD_LOGGER
-from classes.v1 import UserDataJsonRequest, UserDataJsonResponse, GDriveJsonRequest, PublicKeyResponse, PublicKeyRequest
-from classes.exceptions import CRC32ChecksumError, DecryptionError
+from functions.v1 import format_gdrive_json_response, format_file_json_responses, \
+                         format_directory_json_response, format_directory_json_responses
+from classes import USER_DATA, GoogleDrive, APP_CONSTANTS, CLOUD_LOGGER
+from classes.responses import PrettyJSONResponse
+from classes.middleware import generate_nonce, exempt_csp
+from classes.v1 import  UserDataJsonRequest, UserDataJsonResponse, \
+                        GDriveJsonRequest, PublicKeyResponse, PublicKeyRequest
+from classes.exceptions import CRC32ChecksumError, DecryptionError, APIException
 
 # import Python's standard libraries
 import asyncio
@@ -25,11 +29,12 @@ api = FastAPI(
 )
 
 @api.get(
-    path="/api",
+    path="/",
     response_class=PrettyJSONResponse,
     include_in_schema=False
 )
 async def index():
+    generate_nonce()
     return {
         "message": "Welcome to Cultured Downloader API!",
         "latest_version": APP_CONSTANTS.LATEST_VER,
@@ -37,32 +42,39 @@ async def index():
         "bug_reports": "https://github.com/KJHJason/Cultured-Downloader/issues"
     }
 
-@api.get(
-    path=APP_CONSTANTS.DOCS_URL,
-    response_class=HTMLResponse,
-    include_in_schema=False
-)
-async def swagger_ui_html():
-    return get_swagger_ui_html(
-        openapi_url=APP_CONSTANTS.VER_ONE_OPENAPI_JSON_URL,
-        title=f"{api.title} - Swagger UI",
-        oauth2_redirect_url=None,
-        init_oauth=api.swagger_ui_init_oauth,
-        swagger_favicon_url=APP_CONSTANTS.FAVICON_URL,
-        swagger_ui_parameters=api.swagger_ui_parameters,
+if (APP_CONSTANTS.DEBUG_MODE):
+    @api.get(
+        path=APP_CONSTANTS.DOCS_URL,
+        response_class=HTMLResponse,
+        include_in_schema=False
     )
+    async def swagger_ui_html(response: Response):
+        html_response = get_swagger_ui_html(
+            openapi_url=APP_CONSTANTS.VER_ONE_OPENAPI_JSON_URL,
+            title=f"{api.title} - Swagger UI",
+            oauth2_redirect_url=None,
+            init_oauth=api.swagger_ui_init_oauth,
+            swagger_favicon_url=APP_CONSTANTS.FAVICON_URL,
+            swagger_ui_parameters=api.swagger_ui_parameters,
+        )
+        exempt_csp(response)
+        html_response.init_headers(response.headers)
+        return html_response
 
 @api.get(
     path=APP_CONSTANTS.REDOC_URL,
     response_class=HTMLResponse,
     include_in_schema=False
 )
-async def redoc_html():
-    return get_redoc_html(
+async def redoc_html(response: Response):
+    html_response = get_redoc_html(
         openapi_url=APP_CONSTANTS.VER_ONE_OPENAPI_JSON_URL,
         title=f"{api.title} - ReDoc",
         redoc_favicon_url=APP_CONSTANTS.FAVICON_URL
     )
+    exempt_csp(response)
+    html_response.init_headers(response.headers)
+    return html_response
 
 @api.post(
     path="/drive/query",
@@ -71,6 +83,7 @@ async def redoc_html():
     include_in_schema=True
 )
 async def google_drive_query(request: Request, data_payload: GDriveJsonRequest):
+    generate_nonce()
     query_id = data_payload.drive_id
     gdrive_type = data_payload.attachment_type
 
@@ -109,6 +122,7 @@ async def google_drive_query(request: Request, data_payload: GDriveJsonRequest):
     include_in_schema=True
 )
 async def get_public_key(request: Request, json_payload: PublicKeyRequest):
+    generate_nonce()
     algorithm = json_payload.algorithm.lower()
 
     CLOUD_LOGGER.info(
@@ -127,6 +141,7 @@ async def get_public_key(request: Request, json_payload: PublicKeyRequest):
     include_in_schema=True
 )
 async def encrypt_cookie(request: Request, json_payload: UserDataJsonRequest):
+    generate_nonce()
     CLOUD_LOGGER.info(
         content={
             "message": f"User {get_user_ip(request)}: Encrypted their data.",
@@ -163,6 +178,7 @@ async def encrypt_cookie(request: Request, json_payload: UserDataJsonRequest):
     include_in_schema=True
 )
 async def decrypt_cookie(request: Request, json_payload: UserDataJsonRequest):
+    generate_nonce()
     CLOUD_LOGGER.info(
         content={
             "message": f"User {get_user_ip(request)}: Decrypted their data.",

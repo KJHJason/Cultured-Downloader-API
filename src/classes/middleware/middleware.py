@@ -1,53 +1,28 @@
 # import third-party libraries
 from fastapi import Request, Response
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse
+from fastapi.exceptions import RequestValidationError, HTTPException
 from starlette.types import ASGIApp
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from Secweb.xXSSProtection import xXSSProtection
+from Secweb.StrictTransportSecurity import HSTS
+from Secweb.XFrameOptions import XFrame
+from Secweb.XContentTypeOptions import XContentTypeOptions
+from Secweb.ReferrerPolicy import ReferrerPolicy
 
 # import Python's standard libraries
 import json
 import re
-import secrets
-from typing import Any
 
 # import local python libraries
-from .cloud_logger import CLOUD_LOGGER
-from .app_constants import APP_CONSTANTS as AC
+from classes.cloud_logger import CLOUD_LOGGER
+from classes.app_constants import APP_CONSTANTS as AC
+from classes.exceptions import APIException
+from classes.responses import PrettyJSONResponse
+from functions import get_jinja2_template_handler
+from .csp_middleware import ContentSecurityPolicy
 from .jwt_middleware import AuthlibJWTMiddleware, API_HMAC
-
-class PrettyJSONResponse(JSONResponse):
-    """Returns the JSON response with proper indentations"""
-    def render(self, content: Any) -> bytes:
-        return json.dumps(
-            obj=content,
-            ensure_ascii=False,
-            allow_nan=False,
-            indent=4,
-            separators=(", ", ": "),
-        ).encode("utf-8")
-
-class APIException(Exception):
-    """Class for the APIException exception class that will
-    return a JSON response with the error message when raised"""
-    def __init__(self, error: str | dict, status_code: int | None = 400):
-        """Constructor for the APIException exception class
-
-        Usage Example:
-        >>> raise APIException({"error": "invalid request"})
-        >>> raise APIException("invalid request") # the error message will be the same as above
-
-        Attributes:
-            error (str | dict):
-                The error message to be returned to the user.
-                If the error message is a str, it will be converted to a dict with the key "error".
-            status_code (int | None):
-                The status code to be returned to the user. (Default: 400)
-        """
-        self.error = error if (isinstance(error, dict)) \
-                           else {"error": error}
-        self.status_code = status_code
 
 class CacheControlURLRule:
     """Creates an object that contains the path and cache control headers for a route"""
@@ -118,6 +93,52 @@ def add_middleware_to_app(app: ASGIApp):
         jwt_obj=API_HMAC,
         https_only=AC.DEBUG_MODE
     )
+    app.add_middleware(
+        xXSSProtection,
+        Option={"X-XSS-Protection": "1; mode=block"}
+    )
+    app.add_middleware(
+        XFrame,
+        Option={"X-Frame-Options": "DENY"} # change to SAMEORIGIN if required
+    )
+    app.add_middleware(XContentTypeOptions)
+    app.add_middleware(
+        ReferrerPolicy,
+        Option={"Referrer-Policy": "strict-origin-when-cross-origin"}
+    )
+    if (not AC.DEBUG_MODE):
+        app.add_middleware(
+            HSTS,
+            Option={
+                "max-age": 31536000, 
+                "includeSubDomains": True, 
+                "preload": True
+            }
+        )
+        # Add CSP middleware if not in debug mode
+        # since the error message uses inline css/scripts.
+        app.add_middleware(
+            ContentSecurityPolicy,
+            style_nonce=True,
+            script_nonce=True,
+            csp_options={
+                "style-src": [
+                    "'self'",
+                    "https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css",
+                    "https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui.css",
+                    "https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700"
+                ],
+                "frame-src":[
+                    "'self'"
+                ],
+                "script-src":[
+                    "'self'",
+                    "https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.bundle.min.js",
+                    "https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui-bundle.js",
+                    "https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"
+                ],
+            }
+        )
 
     # Add cache headers to the specified routes
     # when the app is not in debug mode
@@ -136,14 +157,14 @@ def add_middleware_to_app(app: ASGIApp):
             )
         )
 
-def add_exception_handlers(app: ASGIApp):
+def add_api_exception_handlers(api: ASGIApp) -> None:
     """Adds custom exception handlers to the API"""
-    @app.exception_handler(APIException)
-    async def api_bad_request_handler(request: Request, exc: APIException):
+    @api.exception_handler(APIException)
+    async def api_bad_request_handler(request: Request, exc: APIException) -> PrettyJSONResponse:
         return PrettyJSONResponse(content=exc.error, status_code=exc.status_code)
 
-    @app.exception_handler(RequestValidationError)
-    async def request_validation_error_handler(request: Request, exc: RequestValidationError):
+    @api.exception_handler(RequestValidationError)
+    async def request_validation_error_handler(request: Request, exc: RequestValidationError) -> PrettyJSONResponse:
         errors = exc.errors()
         CLOUD_LOGGER.error(
             content={
@@ -155,15 +176,53 @@ def add_exception_handlers(app: ASGIApp):
             status_code=422
         )
 
-    @app.exception_handler(StarletteHTTPException)
-    async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
-        CLOUD_LOGGER.error(
-            content={
-                "Starlette HTTP Exception": json.dumps(obj=exc.detail)
-            }
-        )
+    @api.exception_handler(HTTPException)
+    @api.exception_handler(StarletteHTTPException)
+    async def custom_http_exception_handler(
+        request: Request, exc: HTTPException | StarletteHTTPException) -> PrettyJSONResponse:
         status_code = exc.status_code
+        if (status_code == 500):
+            CLOUD_LOGGER.error(
+                content={
+                    "HTTP Exception": json.dumps(obj=exc.detail)
+                }
+            )
         return PrettyJSONResponse(
             content={"error_code": status_code, "message": exc.detail},
             status_code=status_code
+        )
+
+def add_app_exception_handlers(app: ASGIApp) -> None:
+    """Adds custom exception handlers to the web application"""
+    templates = get_jinja2_template_handler()
+
+    @app.exception_handler(HTTPException)
+    @app.exception_handler(StarletteHTTPException)
+    async def custom_error_handler(request: Request, exc: HTTPException | StarletteHTTPException) -> HTMLResponse:
+        status_code = exc.status_code
+        title = f"Uh Oh, Something Went Wrong!"
+        description = "Something went wrong"
+        if (status_code == 404):
+            title = "404 - Page Not Found"
+            description = "The requested resource was not found"
+        elif (status_code == 500):
+            CLOUD_LOGGER.error(
+                content={
+                    "HTTP Exception": json.dumps(obj=exc.detail)
+                }
+            )
+            title = "500 - Internal Server Error"
+            description = "Internal server error"
+        elif (status_code == 418):
+            title = "I'm a teapot!"
+            description = "I'm a teapot"
+
+        return templates.TemplateResponse(
+            name="error.html", 
+            context={
+                "request": request,
+                "status_code": status_code,
+                "title": title.title(),
+                "description": description.title()
+            }
         )
