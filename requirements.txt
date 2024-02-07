@@ -5,7 +5,7 @@ setuptools>=60.1.0
 # uvicorn[standard]>=0.18.3
 
 # For FastAPI Application
-fastapi>=0.81.0
+fastapi>=0.109.1
 
 # Other useful dependencies
 # used in the FastAPI web app
